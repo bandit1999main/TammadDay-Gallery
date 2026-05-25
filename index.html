@@ -557,21 +557,17 @@
                 const unsubscribe = onAuthStateChanged(auth, async (usr) => {
                     if (usr) {
                         setUser(usr);
-                        // Setup Realtime profile
+                        
+                        const googleProfile = {
+                            name: usr.displayName || "User_" + usr.uid.substring(0, 5),
+                            bio: "แต่งแต้มภาพความทรงจำ 📸 (ดึงโปรไฟล์จาก Google)",
+                            avatarUrl: usr.photoURL || ""
+                        };
+                        
+                        // Automatically update Firestore profile to Google profile info
                         const profileRef = doc(db, 'profiles', usr.uid);
-                        onSnapshot(profileRef, (snap) => {
-                            if (snap.exists()) {
-                                setProfile(snap.data());
-                            } else {
-                                const initial = { 
-                                    name: usr.displayName || "User_" + usr.uid.substring(0, 5), 
-                                    bio: "สวัสดีชาว TammadaDay! 📸", 
-                                    avatarUrl: usr.photoURL || "" 
-                                };
-                                setDoc(profileRef, initial);
-                                setProfile(initial);
-                            }
-                        });
+                        await setDoc(profileRef, googleProfile, { merge: true });
+                        setProfile(googleProfile);
                     } else {
                         setUser(null);
                         setProfile({ name: "คุณ (โหมดออฟไลน์)", bio: "เข้าสู่คลาวด์เพื่อเซฟข้ามเครื่อง 📸", avatarUrl: "" });
