@@ -658,7 +658,7 @@
                 } catch (e) {}
             };
 
-            // Image manipulation and filters
+            // Image manipulation and filters with auto-downscaling
             const applyFilterToImage = (filterName) => {
                 setSelectedFilter(filterName);
                 if (!originalImage) return;
@@ -666,9 +666,21 @@
                 const img = new Image();
                 img.src = originalImage;
                 img.onload = () => {
+                    const maxDim = 800;
+                    let w = img.width;
+                    let h = img.height;
+                    if (w > maxDim || h > maxDim) {
+                        if (w > h) {
+                            h = Math.round((h * maxDim) / w);
+                            w = maxDim;
+                        } else {
+                            w = Math.round((w * maxDim) / h);
+                            h = maxDim;
+                        }
+                    }
                     const canvas = document.createElement('canvas');
-                    canvas.width = img.width; 
-                    canvas.height = img.height;
+                    canvas.width = w; 
+                    canvas.height = h;
                     const ctx = canvas.getContext('2d');
                     ctx.filter = filters[filterName]?.filterStr || 'none';
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -676,16 +688,28 @@
                 };
             };
 
-            // HTML5 Canvas generation with applied text & stickers
+            // HTML5 Canvas generation with applied text, stickers, and downscaling for Firestore & LocalStorage compatibility
             const handleSaveDecorations = () => {
                 if (!originalImage) return;
                 
                 const img = new Image();
                 img.src = originalImage;
                 img.onload = () => {
+                    const maxDim = 800;
+                    let w = img.width;
+                    let h = img.height;
+                    if (w > maxDim || h > maxDim) {
+                        if (w > h) {
+                            h = Math.round((h * maxDim) / w);
+                            w = maxDim;
+                        } else {
+                            w = Math.round((w * maxDim) / h);
+                            h = maxDim;
+                        }
+                    }
                     const canvas = document.createElement('canvas');
-                    canvas.width = img.width; 
-                    canvas.height = img.height;
+                    canvas.width = w; 
+                    canvas.height = h;
                     const ctx = canvas.getContext('2d');
                     
                     // 1. Draw image with filter
@@ -724,8 +748,33 @@
                 
                 const reader = new FileReader();
                 reader.onload = (event) => {
-                    setOriginalImage(event.target.result);
-                    setImagePreview(event.target.result);
+                    const base64Src = event.target.result;
+                    // Automatically pre-compress the image to max 800px on load to keep files lightweight
+                    const img = new Image();
+                    img.src = base64Src;
+                    img.onload = () => {
+                        const maxDim = 800;
+                        let w = img.width;
+                        let h = img.height;
+                        if (w > maxDim || h > maxDim) {
+                            if (w > h) {
+                                h = Math.round((h * maxDim) / w);
+                                w = maxDim;
+                            } else {
+                                w = Math.round((w * maxDim) / h);
+                                h = maxDim;
+                            }
+                        }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = w; 
+                        canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                        
+                        setImagePreview(compressedBase64);
+                        setOriginalImage(compressedBase64); // Pre-compressed image becomes our baseline original
+                    };
                     setSelectedFilter('none');
                 };
                 reader.readAsDataURL(file);
