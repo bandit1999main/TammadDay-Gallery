@@ -1,1798 +1,1545 @@
-/**
- * app.js - Main Application Logic, State Controller & Dashboard Renderer
- * Implements full Task CRUD, Category Management, Drag & Drop attachments,
- * local alerts, and interactive SVG analytics.
- * Version 1.0.5 - Mobile Responsive Optimization - 2026-05-22
- */
+// Firebase Cloud Web Imports
+import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import {
+    getFirestore,
+    doc,
+    setDoc,
+    collection,
+    onSnapshot,
+    updateDoc,
+    deleteDoc,
+    query,
+    arrayUnion,
+    arrayRemove
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-// ====================================================
-// 1. CONSTANTS & SYSTEM CONFIGURATION
-// ====================================================
-const DEFAULT_CATEGORIES = [
-    { id: 'cat-daily', name: 'บัญชีประจำวัน ส่วนการเงิน', color: '#737c68', isDefault: true },
-    { id: 'cat-bsk60', name: 'บสค.60 ส่วนการเงิน', color: '#a39580', isDefault: true },
-    { id: 'cat-invoice', name: 'ใบแจ้งหนี้ ส่วนการเงิน', color: '#788896', isDefault: true },
-    { id: 'cat-monthly', name: 'บัญชีประจำเดือน ส่วนการเงิน', color: '#b58970', isDefault: true },
-    { id: 'cat-whtax', name: 'ภาษีเงินได้หัก ณ ที่จ่าย ส่วนการเงิน', color: '#bd7878', isDefault: true }
-];
+const { useState, useEffect, useRef, useMemo } = React;
 
-const PRESETS_COLORS = [
-    '#737c68', // Sage Green
-    '#b58970', // Warm Clay
-    '#a39580', // Soft Taupe
-    '#788896', // Slate Blue
-    '#bd7878', // Dusty Rose
-    '#c5a059', // Warm Amber
-    '#d4b28c', // Muted Ochre
-    '#5c6353', // Earthy Olive
-    '#c4bdae', // Sand
-    '#a26b5c'  // Terracotta
-];
-
-const STATUS_DATA = {
-    'รับงาน': { label: 'รับงาน', color: '#788896', bg: 'rgba(120, 136, 150, 0.15)', border: 'rgba(120, 136, 150, 0.3)' },
-    'กำลังทำ': { label: 'กำลังทำ', color: '#b58970', bg: 'rgba(181, 137, 112, 0.15)', border: 'rgba(181, 137, 112, 0.3)' },
-    'เสร็จแล้ว': { label: 'เสร็จแล้ว', color: '#737c68', bg: 'rgba(115, 124, 104, 0.15)', border: 'rgba(115, 124, 104, 0.3)' },
-    'ยกเลิก': { label: 'ยกเลิก', color: '#bd7878', bg: 'rgba(189, 120, 120, 0.15)', border: 'rgba(189, 120, 120, 0.3)' }
+// Default public fallback Firebase configuration for team instant sync
+let defaultFirebaseConfig = {
+    apiKey: "AIzaSyDsRM-S1UFdXyvS7_mMMK7D4cebZsKihXc",
+    authDomain: "dailygallery-thailand.firebaseapp.com",
+    projectId: "dailygallery-thailand",
+    storageBucket: "dailygallery-thailand.firebasestorage.app",
+    messagingSenderId: "690723713618",
+    appId: "1:690723713618:web:c992cec1fb6c10c9e7e58b",
+    measurementId: "G-5EQHHE9429"
 };
 
-// ====================================================
-// 2. STATE MANAGER
-// ====================================================
-const AppState = {
-    tasks: [],
-    categories: [],
-    currentView: 'dashboard', // dashboard | tasks | categories
-    
-    // Temporaries for Modals / Editing
-    pendingFiles: [], // Attached files in creation modal
-    selectedCategoryColor: PRESETS_COLORS[0],
-    
-    // Auto-update timer
-    countdownInterval: null
-};
+const storedConfig = localStorage.getItem('custom_firebase_config_dailygallery');
+let activeConfig = defaultFirebaseConfig;
+if (storedConfig) {
+    try { activeConfig = JSON.parse(storedConfig); } catch (e) {}
+}
 
-// ====================================================
-// 3. INITIALIZATION & DATA LOADING
-// ====================================================
-document.addEventListener('DOMContentLoaded', async () => {
+let app, auth, db;
+try {
+    if (getApps().length === 0) app = initializeApp(activeConfig);
+    else app = getApps()[0];
+    auth = getAuth(app); 
+    db = getFirestore(app);
+} catch (e) { 
+    console.error("Firebase startup failed:", e); 
+}
+
+const appId = 'live-ig-app';
+const googleProvider = new GoogleAuthProvider();
+
+// Synthesized Retro sound effects with AudioContext
+const playSynthSound = (type) => {
     try {
-        // Initialize Database Router (Firebase or IndexedDB)
-        await window.TaskDB.init();
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); 
+        gain.connect(ctx.destination);
         
-        // Update DB mode indicator in UI
-        updateDbModeUI();
-        
-        // Load or initialize categories
-        await loadCategories();
-        
-        // Load tasks
-        await loadTasks();
-        
-        // Render UI
-        setupNavigation();
-        setupCategoryForm();
-        setupTaskForm();
-        setupSyncSettings(); // Initialize Cloud Sync settings page listeners
-        renderView();
-        
-        // Start live countdown updater (updates every minute)
-        AppState.countdownInterval = setInterval(() => {
-            if (AppState.currentView === 'dashboard') {
-                renderDashboardAlerts();
-            } else if (AppState.currentView === 'tasks') {
-                renderTasksList();
-            }
-        }, 60000);
-        
-        console.log("Application started successfully");
-    } catch (err) {
-        console.error("Critical start failure", err);
-        alert("ไม่สามารถเปิดระบบฐานข้อมูลในเครื่องได้ กรุณารีเฟรชหรือสลับเบราว์เซอร์");
-    }
-});
-
-// Load categories from database or set defaults
-async function loadCategories() {
-    let dbCategories = await window.TaskDB.getAllCategories();
-    if (dbCategories.length === 0) {
-        // Seed default categories
-        for (const cat of DEFAULT_CATEGORIES) {
-            await window.TaskDB.saveCategory(cat);
+        if (type === 'like') {
+            osc.type = 'sine'; 
+            osc.frequency.setValueAtTime(400, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.12);
+            gain.gain.setValueAtTime(0.1, ctx.currentTime); 
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+            osc.start(); 
+            osc.stop(ctx.currentTime + 0.12);
+        } else if (type === 'post') {
+            osc.type = 'triangle'; 
+            osc.frequency.setValueAtTime(300, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.22);
+            gain.gain.setValueAtTime(0.15, ctx.currentTime); 
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.22);
+            osc.start(); 
+            osc.stop(ctx.currentTime + 0.22);
+        } else if (type === 'delete') {
+            osc.type = 'sawtooth'; 
+            osc.frequency.setValueAtTime(150, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.3);
+            gain.gain.setValueAtTime(0.08, ctx.currentTime); 
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+            osc.start(); 
+            osc.stop(ctx.currentTime + 0.3);
         }
-        dbCategories = await window.TaskDB.getAllCategories();
-    } else {
-        // Migration: automatically align old default category colors with our cozy earth tone theme
-        let modified = false;
-        for (const dbCat of dbCategories) {
-            const match = DEFAULT_CATEGORIES.find(c => c.id === dbCat.id);
-            if (match && dbCat.color !== match.color) {
-                dbCat.color = match.color;
-                await window.TaskDB.saveCategory(dbCat);
-                modified = true;
-            }
-        }
-        if (modified) {
-            dbCategories = await window.TaskDB.getAllCategories();
-        }
-    }
-    AppState.categories = dbCategories;
-    populateCategoryFilters();
-}
-
-// Load tasks from database
-async function loadTasks() {
-    AppState.tasks = await window.TaskDB.getAllTasks();
-}
-
-// Populate categories in all select dropdowns
-function populateCategoryFilters() {
-    const filterSelect = document.getElementById('filter-category-select');
-    const formSelect = document.getElementById('task-category-select');
-    
-    // Clear old options (keep 'all' in filter)
-    filterSelect.innerHTML = '<option value="all">ทุกหมวดหมู่</option>';
-    formSelect.innerHTML = '';
-    
-    AppState.categories.forEach(cat => {
-        // Add to filter dropdown
-        const filterOpt = document.createElement('option');
-        filterOpt.value = cat.id;
-        filterOpt.textContent = cat.name;
-        filterSelect.appendChild(filterOpt);
-        
-        // Add to form dropdown
-        const formOpt = document.createElement('option');
-        formOpt.value = cat.id;
-        formOpt.textContent = cat.name;
-        formSelect.appendChild(formOpt);
-    });
-}
-
-// ====================================================
-// 4. ROUTING & VIEW CONTROLLER
-// ====================================================
-function setupNavigation() {
-    const navDashboard = document.getElementById('btn-nav-dashboard');
-    const navTasks = document.getElementById('btn-nav-tasks');
-    const navCategories = document.getElementById('btn-nav-categories');
-    const navSync = document.getElementById('btn-nav-sync');
-    
-    const menuDashboardLi = document.getElementById('menu-dashboard-li');
-    const menuTasksLi = document.getElementById('menu-tasks-li');
-    const menuCategoriesLi = document.getElementById('menu-categories-li');
-    const menuSyncLi = document.getElementById('menu-sync-li');
-    
-    const btnCreateTaskMain = document.getElementById('btn-create-task-main');
-    const btnCreateTaskFab = document.getElementById('btn-create-task-fab');
-    
-    navDashboard.addEventListener('click', () => switchView('dashboard'));
-    navTasks.addEventListener('click', () => switchView('tasks'));
-    navCategories.addEventListener('click', () => switchView('categories'));
-    navSync.addEventListener('click', () => switchView('sync'));
-    
-    btnCreateTaskMain.addEventListener('click', () => {
-        openTaskModal();
-    });
-    
-    if (btnCreateTaskFab) {
-        btnCreateTaskFab.addEventListener('click', () => {
-            openTaskModal();
-        });
-    }
-    
-    function switchView(viewName) {
-        AppState.currentView = viewName;
-        
-        // Remove active class from all menu items
-        menuDashboardLi.classList.remove('active');
-        menuTasksLi.classList.remove('active');
-        menuCategoriesLi.classList.remove('active');
-        menuSyncLi.classList.remove('active');
-        
-        // Hide all views
-        document.getElementById('view-dashboard').classList.add('hidden');
-        document.getElementById('view-tasks').classList.add('hidden');
-        document.getElementById('view-categories').classList.add('hidden');
-        document.getElementById('view-sync').classList.add('hidden');
-        
-        // Handle Mobile FAB visibility
-        if (btnCreateTaskFab) {
-            if (viewName === 'dashboard' || viewName === 'tasks') {
-                btnCreateTaskFab.classList.remove('hidden-fab');
-            } else {
-                btnCreateTaskFab.classList.add('hidden-fab');
-            }
-        }
-        
-        // Show active view & menu item
-        if (viewName === 'dashboard') {
-            menuDashboardLi.classList.add('active');
-            document.getElementById('view-dashboard').classList.remove('hidden');
-            document.getElementById('page-title-text').textContent = 'ภาพรวมของงาน (Dashboard)';
-            document.getElementById('page-subtitle-text').textContent = 'วิเคราะห์สถานะงานการเงิน ดำเนินการ และสถิติต่างๆ ในปัจจุบัน';
-        } else if (viewName === 'tasks') {
-            menuTasksLi.classList.add('active');
-            document.getElementById('view-tasks').classList.remove('hidden');
-            document.getElementById('page-title-text').textContent = 'รายการตรวจตามงานทั้งหมด';
-            document.getElementById('page-subtitle-text').textContent = 'จัดการ ค้นหา กรองงานการเงิน และดาวน์โหลดเอกสารไฟล์แนบ';
-        } else if (viewName === 'categories') {
-            menuCategoriesLi.classList.add('active');
-            document.getElementById('view-categories').classList.remove('hidden');
-            document.getElementById('page-title-text').textContent = 'จัดการหมวดหมู่/ประเภทงาน';
-            document.getElementById('page-subtitle-text').textContent = 'เพิ่ม หมวดหมู่เฉพาะ เพื่อความยืดหยุ่นในการจัดหมวดหมู่เอกสารและงานบัญชี';
-        } else if (viewName === 'sync') {
-            menuSyncLi.classList.add('active');
-            document.getElementById('view-sync').classList.remove('hidden');
-            document.getElementById('page-title-text').textContent = 'ระบบเชื่อมต่อคลาวด์และแบ่งปัน (Cloud Sync)';
-            document.getElementById('page-subtitle-text').textContent = 'เชื่อมโยงฐานข้อมูลส่วนกลางผ่าน Google Firebase และย้ายข้อมูลของคุณขึ้น Cloud';
-            renderSyncSettings();
-        }
-        
-        renderView();
-    }
-}
-
-function renderView() {
-    lucide.createIcons();
-    if (AppState.currentView === 'dashboard') {
-        renderDashboard();
-    } else if (AppState.currentView === 'tasks') {
-        renderTasksList();
-    } else if (AppState.currentView === 'categories') {
-        renderCategoriesList();
-    } else if (AppState.currentView === 'sync') {
-        renderSyncSettings();
-    }
-}
-
-// ====================================================
-// 5. DATE & ALERT ENGINE
-// ====================================================
-
-/**
- * Calculates due status and outputs elegant visual descriptors
- * @param {string} dueDateISO 
- * @param {string} status 
- * @returns {object} status details
- */
-function calculateDueDetails(dueDateISO, status) {
-    if (status === 'เสร็จแล้ว' || status === 'ยกเลิก') {
-        return {
-            class: 'on-track',
-            text: 'เสร็จสิ้นภารกิจ',
-            icon: 'check',
-            urgency: 0
-        };
-    }
-    
-    if (!dueDateISO) {
-        return {
-            class: 'on-track',
-            text: 'ไม่ได้ระบุกำหนดส่ง',
-            icon: 'calendar',
-            urgency: 0
-        };
-    }
-
-    const now = new Date();
-    const due = new Date(dueDateISO);
-    const diffMs = due - now;
-    
-    if (diffMs < 0) {
-        // Overdue (เลยกำหนด)
-        const absDiff = Math.abs(diffMs);
-        const days = Math.floor(absDiff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((absDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        let timeStr = 'เลยกำหนดส่งแล้ว';
-        if (days > 0) {
-            timeStr = `เลยกำหนดส่งไปแล้ว ${days} วัน ${hours} ชม.`;
-        } else if (hours > 0) {
-            timeStr = `เลยกำหนดส่งไปแล้ว ${hours} ชม.`;
-        } else {
-            timeStr = `เลยกำหนดส่งไปแล้วไม่กี่นาที`;
-        }
-        
-        return {
-            class: 'overdue',
-            text: timeStr,
-            icon: 'alert-octagon',
-            urgency: 3
-        };
-    }
-    
-    // Remaining time
-    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    
-    let timeText = '';
-    if (days > 0) {
-        timeText = `เหลือเวลา ${days} วัน ${hours} ชม.`;
-    } else if (hours > 0) {
-        timeText = `เหลือเวลาอีก ${hours} ชม.`;
-    } else {
-        timeText = `เหลือเวลาน้อยกว่า 1 ชม. !`;
-    }
-
-    // Urgency ranking: 2 = urgent (<=24h), 1 = warning (<=3 days), 0 = normal (>3 days)
-    if (diffMs <= 1000 * 60 * 60 * 24) {
-        return {
-            class: 'urgent',
-            text: `⚠️ ด่วนที่สุด! ${timeText}`,
-            icon: 'alert-triangle',
-            urgency: 2
-        };
-    } else if (diffMs <= 1000 * 60 * 60 * 24 * 3) {
-        return {
-            class: 'urgent',
-            text: timeText,
-            icon: 'clock',
-            urgency: 1
-        };
-    } else {
-        return {
-            class: 'on-track',
-            text: timeText,
-            icon: 'calendar',
-            urgency: 0
-        };
-    }
-}
-
-// Utility to format date nicely
-function formatDateString(isoString) {
-    if (!isoString) return '-';
-    const date = new Date(isoString);
-    return date.toLocaleDateString('th-TH', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    }) + ' น.';
-}
-
-// ====================================================
-// 6. DASHBOARD CONTROLLER (INTERACTIVE GRAPHS)
-// ====================================================
-function renderDashboard() {
-    const totalCount = AppState.tasks.length;
-    
-    let completedCount = 0;
-    let pendingCount = 0;
-    let overdueCount = 0;
-    
-    AppState.tasks.forEach(task => {
-        if (task.status === 'เสร็จแล้ว') {
-            completedCount++;
-        } else if (task.status === 'กำลังทำ' || task.status === 'รับงาน') {
-            pendingCount++;
-            
-            // Check if overdue
-            if (task.dueDate && new Date(task.dueDate) < new Date()) {
-                overdueCount++;
-            }
-        }
-    });
-
-    // Write numerical metrics
-    document.getElementById('stat-total-tasks').textContent = totalCount;
-    document.getElementById('stat-pending-tasks').textContent = pendingCount;
-    document.getElementById('stat-completed-tasks').textContent = completedCount;
-    document.getElementById('stat-overdue-tasks').textContent = overdueCount;
-    
-    // Render dynamic visualizations
-    renderStatusDonutChart();
-    renderWorkloadBreakdown();
-    renderDashboardAlerts();
-}
-
-// Render dynamic interactive SVG Donut chart
-function renderStatusDonutChart() {
-    const svg = document.getElementById('status-donut-svg');
-    const legend = document.getElementById('status-chart-legend');
-    
-    svg.innerHTML = '';
-    legend.innerHTML = '';
-    
-    const statusCounts = {
-        'รับงาน': 0,
-        'กำลังทำ': 0,
-        'เสร็จแล้ว': 0,
-        'ยกเลิก': 0
-    };
-    
-    AppState.tasks.forEach(t => {
-        if (statusCounts[t.status] !== undefined) {
-            statusCounts[t.status]++;
-        }
-    });
-
-    const total = AppState.tasks.length;
-    document.getElementById('donut-total-count').textContent = total;
-
-    if (total === 0) {
-        // Draw empty indicator state
-        svg.innerHTML = `
-            <circle class="donut-segment" cx="100" cy="100" r="70" 
-                    stroke="var(--glass-border)" stroke-dasharray="439.82" stroke-dashoffset="0" />
-        `;
-        legend.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 0.9rem;">ไม่มีงานที่จะแสดงกราฟ</div>`;
-        return;
-    }
-
-    // Geometry parameters for SVG circles with radius 70
-    const radius = 70;
-    const circ = 2 * Math.PI * radius; // 439.82
-    let accumulatedOffset = 0;
-    
-    Object.keys(STATUS_DATA).forEach((statusKey) => {
-        const count = statusCounts[statusKey];
-        const config = STATUS_DATA[statusKey];
-        
-        if (count === 0) return;
-        
-        const percentage = (count / total) * 100;
-        const segmentLength = (count / total) * circ;
-        const offset = circ - segmentLength + accumulatedOffset;
-        
-        // Render glowing visual segment path
-        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        circle.setAttribute('class', 'donut-segment');
-        circle.setAttribute('cx', '100');
-        circle.setAttribute('cy', '100');
-        circle.setAttribute('r', radius.toString());
-        circle.setAttribute('stroke', config.color);
-        circle.setAttribute('stroke-dasharray', `${segmentLength} ${circ - segmentLength}`);
-        circle.setAttribute('stroke-dashoffset', accumulatedOffset.toString());
-        circle.setAttribute('style', `--glow-color: ${config.color}`);
-        
-        // Hover effects in donut center
-        circle.addEventListener('mouseover', () => {
-            document.getElementById('donut-total-count').textContent = count;
-            document.getElementById('donut-total-count').style.color = config.color;
-            const labelEl = document.querySelector('.donut-center-lbl');
-            labelEl.textContent = `${statusKey} (${percentage.toFixed(0)}%)`;
-        });
-        
-        circle.addEventListener('mouseout', () => {
-            document.getElementById('donut-total-count').textContent = total;
-            document.getElementById('donut-total-count').style.color = 'var(--text-primary)';
-            const labelEl = document.querySelector('.donut-center-lbl');
-            labelEl.textContent = 'งานทั้งหมด';
-        });
-        
-        svg.appendChild(circle);
-        accumulatedOffset -= segmentLength;
-        
-        // Add legend elements dynamically
-        const legItem = document.createElement('div');
-        legItem.className = 'legend-item';
-        legItem.setAttribute('style', `--color: ${config.color}`);
-        legItem.innerHTML = `
-            <div class="legend-left">
-                <div class="legend-color"></div>
-                <span>${config.label}</span>
-            </div>
-            <div class="legend-right">
-                <span class="legend-val">${count}</span>
-                <span class="legend-pct">(${percentage.toFixed(0)}%)</span>
-            </div>
-        `;
-        
-        // Connect legend items with filtering directly
-        legItem.addEventListener('click', () => {
-            document.getElementById('filter-status-select').value = statusKey;
-            document.getElementById('btn-nav-tasks').click();
-        });
-        
-        legend.appendChild(legItem);
-    });
-}
-
-// Workload representation
-function renderWorkloadBreakdown() {
-    const list = document.getElementById('workload-breakdown-list');
-    list.innerHTML = '';
-    
-    if (AppState.tasks.length === 0) {
-        list.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.9rem;">ไม่มีงานจัดกลุ่มตามหมวดหมู่</div>`;
-        return;
-    }
-    
-    // Group tasks by category
-    const catWorkload = {};
-    AppState.categories.forEach(cat => {
-        catWorkload[cat.id] = {
-            name: cat.name,
-            color: cat.color,
-            total: 0,
-            completed: 0
-        };
-    });
-    
-    AppState.tasks.forEach(t => {
-        // Safeguard if category was deleted or unmapped
-        if (!catWorkload[t.categoryId]) {
-            catWorkload[t.categoryId] = {
-                name: 'หมวดหมู่ทั่วไป / อื่นๆ',
-                color: '#6b7280',
-                total: 0,
-                completed: 0
-            };
-        }
-        catWorkload[t.categoryId].total++;
-        if (t.status === 'เสร็จแล้ว') {
-            catWorkload[t.categoryId].completed++;
-        }
-    });
-
-    // Render progress rows
-    Object.keys(catWorkload).forEach(catId => {
-        const item = catWorkload[catId];
-        if (item.total === 0) return; // Skip empty workloads for clean visual interface
-
-        const percent = (item.completed / item.total) * 100;
-        
-        const workItem = document.createElement('div');
-        workItem.className = 'workload-item';
-        workItem.innerHTML = `
-            <div class="workload-info">
-                <span class="workload-name">${item.name}</span>
-                <span class="workload-count">
-                    <span>${item.completed}</span> / ${item.total} งาน
-                </span>
-            </div>
-            <div class="progress-track">
-                <div class="progress-fill" style="width: ${percent}%; background: ${item.color}; --primary-glow: rgba(${hexToRgb(item.color)}, 0.45);"></div>
-            </div>
-        `;
-        
-        workItem.style.cursor = 'pointer';
-        workItem.addEventListener('click', () => {
-            document.getElementById('filter-category-select').value = catId;
-            document.getElementById('btn-nav-tasks').click();
-        });
-        
-        list.appendChild(workItem);
-    });
-}
-
-// Convert Hex colors safely to RGB strings for shadows
-function hexToRgb(hex) {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? 
-        `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` 
-        : '99, 102, 241';
-}
-
-// System Alerts for urgent and overdue tasks
-function renderDashboardAlerts() {
-    const list = document.getElementById('alert-notifications-list');
-    list.innerHTML = '';
-    
-    // Filter active warning tasks (excluding complete and cancelled)
-    const alertTasks = AppState.tasks.filter(t => t.status !== 'เสร็จแล้ว' && t.status !== 'ยกเลิก' && t.dueDate)
-        .map(t => {
-            const details = calculateDueDetails(t.dueDate, t.status);
-            return { task: t, details };
-        })
-        .filter(item => item.details.urgency > 0) // Urgency 1 (Warning <= 3 days), 2 (Urgent <= 24h), 3 (Overdue)
-        .sort((a, b) => b.details.urgency - a.details.urgency); // Most urgent first
-
-    if (alertTasks.length === 0) {
-        list.innerHTML = `
-            <div class="empty-alerts">
-                <i data-lucide="check-circle" style="color: var(--status-done); margin-bottom: 0.25rem;"></i>
-                <div style="font-weight: 600;">ยอดเยี่ยม! ไม่มีงานใกล้กำหนดส่ง หรือเกินกำหนดส่งเลย</div>
-            </div>
-        `;
-        lucide.createIcons();
-        return;
-    }
-
-    // Render alert cards
-    alertTasks.forEach(item => {
-        const card = document.createElement('div');
-        const isOverdue = item.details.urgency === 3;
-        card.className = `alert-card ${isOverdue ? 'overdue' : 'warning-near'}`;
-        
-        card.innerHTML = `
-            <div class="alert-icon">${isOverdue ? '🔴' : '🟠'}</div>
-            <div class="alert-content">
-                <div class="alert-task-title">${item.task.title}</div>
-                <div class="alert-task-due">${item.details.text}</div>
-                <span class="alert-task-status" style="background: ${STATUS_DATA[item.task.status].bg}; color: ${STATUS_DATA[item.task.status].color}; border: 1px solid ${STATUS_DATA[item.task.status].border};">
-                    ${item.task.status}
-                </span>
-            </div>
-        `;
-        
-        card.style.cursor = 'pointer';
-        card.addEventListener('click', () => {
-            openTaskDetailsModal(item.task.id);
-        });
-        
-        list.appendChild(card);
-    });
-}
-
-// ====================================================
-// 7. TASK MANAGEMENT VIEWS & FORM SUBMISSION
-// ====================================================
-function renderTasksList() {
-    const container = document.getElementById('tasks-cards-container');
-    container.innerHTML = '';
-    
-    // Retrieve values from filters
-    const searchVal = document.getElementById('filter-search-input').value.toLowerCase().trim();
-    const statusVal = document.getElementById('filter-status-select').value;
-    const categoryVal = document.getElementById('filter-category-select').value;
-    const sortVal = document.getElementById('filter-sort-select').value;
-    
-    // Filter tasks array
-    let filtered = AppState.tasks.filter(task => {
-        const matchesSearch = task.title.toLowerCase().includes(searchVal) || 
-                              (task.description && task.description.toLowerCase().includes(searchVal));
-        const matchesStatus = statusVal === 'all' || task.status === statusVal;
-        const matchesCategory = categoryVal === 'all' || task.categoryId === categoryVal;
-        
-        return matchesSearch && matchesStatus && matchesCategory;
-    });
-
-    // Sort tasks array
-    filtered.sort((a, b) => {
-        if (sortVal === 'due-asc') {
-            if (!a.dueDate) return 1;
-            if (!b.dueDate) return -1;
-            return new Date(a.dueDate) - new Date(b.dueDate);
-        } else if (sortVal === 'due-desc') {
-            if (!a.dueDate) return 1;
-            if (!b.dueDate) return -1;
-            return new Date(b.dueDate) - new Date(a.dueDate);
-        } else if (sortVal === 'title-asc') {
-            return a.title.localeCompare(b.title, 'th');
-        } else if (sortVal === 'created-desc') {
-            return new Date(b.createdAt) - new Date(a.createdAt);
-        }
-        return 0;
-    });
-
-    if (filtered.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon"><i data-lucide="inbox"></i></div>
-                <h3>ไม่พบรายการตรวจสอบงาน</h3>
-                <p>ไม่มีงานที่ตรงตามตัวกรองที่เลือกไว้ในปัจจุบัน ลองเพิ่มงานใหม่หรือค้นหาคำค้นอื่น</p>
-                <button class="btn-primary" onclick="openTaskModal()" style="margin: 0 auto;">
-                    <i data-lucide="plus"></i>
-                    <span>เริ่มลงบันทึกงานใหม่</span>
-                </button>
-            </div>
-        `;
-        lucide.createIcons();
-        return;
-    }
-
-    // Render task cards
-    filtered.forEach(task => {
-        const card = document.createElement('div');
-        card.className = 'glass-card task-card';
-        
-        // Find category color & name
-        const cat = AppState.categories.find(c => c.id === task.categoryId) || { name: 'อื่นๆ', color: '#6b7280' };
-        
-        // Calculate due warning
-        const dueDetails = calculateDueDetails(task.dueDate, task.status);
-        const hasAttachments = task.hasAttachments;
-        
-        card.innerHTML = `
-            <div class="task-card-header">
-                <span class="category-tag" style="--cat-bg: rgba(${hexToRgb(cat.color)}, 0.12); --cat-color: ${cat.color}; --cat-border: rgba(${hexToRgb(cat.color)}, 0.25);">
-                    ${cat.name}
-                </span>
-                <div class="task-card-actions">
-                    <button class="icon-btn edit-task-btn" title="แก้ไขข้อมูลงาน"><i data-lucide="edit-2"></i></button>
-                    <button class="icon-btn delete-btn delete-task-btn" title="ลบงานนี้"><i data-lucide="trash-2"></i></button>
-                </div>
-            </div>
-            
-            <h3 class="task-title">${task.title}</h3>
-            <p class="task-desc">${task.description || '<span style="color: var(--text-muted); font-style: italic;">ไม่มีคำอธิบายเพิ่มเติม</span>'}</p>
-            
-            <div class="task-meta">
-                <div class="due-indicator ${dueDetails.class}">
-                    <i data-lucide="${dueDetails.icon}"></i>
-                    <span>${dueDetails.text}</span>
-                </div>
-                
-                <span class="status-badge ${getStatusClass(task.status)}">
-                    ${task.status}
-                </span>
-            </div>
-            
-            ${hasAttachments ? `
-                <div class="card-attachment-count" style="margin-top: -0.4rem; font-size: 0.75rem;">
-                    <i data-lucide="paperclip" style="width: 12px; height: 12px;"></i>
-                    <span>มีไฟล์เอกสารแนบเรียบร้อย</span>
-                </div>
-            ` : ''}
-        `;
-
-        // Event listener for opening details
-        card.querySelector('.task-title').addEventListener('click', () => {
-            openTaskDetailsModal(task.id);
-        });
-        
-        // Quick edits and deletes
-        card.querySelector('.edit-task-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            openTaskModal(task.id);
-        });
-        
-        card.querySelector('.delete-task-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            confirmDeleteTask(task.id, task.title);
-        });
-        
-        card.querySelector('.status-badge').addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleTaskStatus(task.id);
-        });
-
-        container.appendChild(card);
-    });
-
-    lucide.createIcons();
-}
-
-function getStatusClass(status) {
-    if (status === 'รับงาน') return 'recv';
-    if (status === 'กำลังทำ') return 'prog';
-    if (status === 'เสร็จแล้ว') return 'done';
-    if (status === 'ยกเลิก') return 'canc';
-    return '';
-}
-
-// Toggle status quickly on badge click
-async function toggleTaskStatus(taskId) {
-    const task = AppState.tasks.find(t => t.id === taskId);
-    if (!task) return;
-    
-    const statusCycle = ['รับงาน', 'กำลังทำ', 'เสร็จแล้ว', 'ยกเลิก'];
-    const currentIndex = statusCycle.indexOf(task.status);
-    const nextIndex = (currentIndex + 1) % statusCycle.length;
-    
-    task.status = statusCycle[nextIndex];
-    task.updatedAt = new Date().toISOString();
-    
-    await window.TaskDB.saveTask(task);
-    await loadTasks();
-    renderTasksList();
-}
-
-// Setup Event listeners for search filter inputs
-function setupTaskForm() {
-    const searchInput = document.getElementById('filter-search-input');
-    const statusSelect = document.getElementById('filter-status-select');
-    const categorySelect = document.getElementById('filter-category-select');
-    const sortSelect = document.getElementById('filter-sort-select');
-
-    searchInput.addEventListener('input', renderTasksList);
-    statusSelect.addEventListener('change', renderTasksList);
-    categorySelect.addEventListener('change', renderTasksList);
-    sortSelect.addEventListener('change', renderTasksList);
-    
-    // Add/Edit Modal controls
-    const btnCloseTaskModal = document.getElementById('btn-close-task-modal');
-    const btnCancelTaskModal = document.getElementById('btn-cancel-task-modal');
-    const form = document.getElementById('task-form');
-    
-    btnCloseTaskModal.addEventListener('click', closeTaskModal);
-    btnCancelTaskModal.addEventListener('click', closeTaskModal);
-    
-    // File inputs & Drag and drop
-    const dropZone = document.getElementById('task-drag-drop-zone');
-    const fileInput = document.getElementById('task-file-input');
-    
-    dropZone.addEventListener('click', () => fileInput.click());
-    
-    fileInput.addEventListener('change', (e) => {
-        handleSelectedFiles(e.target.files);
-    });
-    
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropZone.classList.add('dragover');
-    });
-    
-    dropZone.addEventListener('dragleave', () => {
-        dropZone.classList.remove('dragover');
-    });
-    
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('dragover');
-        if (e.dataTransfer.files.length > 0) {
-            handleSelectedFiles(e.dataTransfer.files);
-        }
-    });
-
-    // Form Submission
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        await saveTaskSubmit();
-    });
-}
-
-// Handles files temporarily held in AppState.pendingFiles
-function handleSelectedFiles(filesList) {
-    for (let i = 0; i < filesList.length; i++) {
-        const file = filesList[i];
-        
-        // Prevent duplicate file names inside pending zone
-        if (AppState.pendingFiles.some(f => f.name === file.name)) {
-            continue;
-        }
-        
-        AppState.pendingFiles.push({
-            id: 'temp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            fileObject: file // Actual File object to save later
-        });
-    }
-    
-    renderModalAttachments();
-}
-
-function renderModalAttachments() {
-    const list = document.getElementById('modal-attachments-list');
-    list.innerHTML = '';
-    
-    if (AppState.pendingFiles.length === 0) return;
-    
-    AppState.pendingFiles.forEach(file => {
-        const item = document.createElement('div');
-        item.className = 'attachment-item';
-        
-        // Format size
-        const sizeFormatted = formatFileSize(file.size);
-        
-        item.innerHTML = `
-            <div class="file-info">
-                <i data-lucide="file-text" class="file-icon"></i>
-                <span class="file-name" title="${file.name}">${file.name}</span>
-                <span class="file-size">(${sizeFormatted})</span>
-            </div>
-            <div class="attachment-actions">
-                <button type="button" class="icon-btn delete-btn" onclick="removePendingFile('${file.id}')" title="ลบไฟล์">
-                    <i data-lucide="trash-2"></i>
-                </button>
-            </div>
-        `;
-        list.appendChild(item);
-    });
-    
-    lucide.createIcons();
-}
-
-// Remove pending file from memory state
-window.removePendingFile = function(tempId) {
-    AppState.pendingFiles = AppState.pendingFiles.filter(f => f.id !== tempId);
-    renderModalAttachments();
+    } catch (e) {}
 };
 
-function formatFileSize(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
+// Icons Components
+const HeartIcon = ({ filled, className = "" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill={filled ? "#ef4444" : "none"} stroke={filled ? "#ef4444" : "currentColor"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={"cursor-pointer hover:scale-110 active:scale-95 transition-transform " + className}>
+        <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+    </svg>
+);
 
-// Opens the Task editor modal (handles both Add and Edit)
-async function openTaskModal(taskId = null) {
-    const overlay = document.getElementById('task-modal-overlay');
-    const modalTitle = document.getElementById('task-modal-title');
-    const form = document.getElementById('task-form');
-    
-    form.reset();
-    AppState.pendingFiles = [];
-    document.getElementById('modal-attachments-list').innerHTML = '';
-    
-    // Set default due datetime value to tomorrow same time
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setMinutes(tomorrow.getMinutes() - tomorrow.getTimezoneOffset());
-    document.getElementById('task-due-input').value = tomorrow.toISOString().slice(0, 16);
-    
-    // Reload categories options
-    populateCategoryFilters();
-    
-    if (taskId) {
-        // Edit mode
-        const task = AppState.tasks.find(t => t.id === taskId);
-        if (!task) return;
+const GridIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <rect width="7" height="7" x="3" y="3" rx="1" />
+        <rect width="7" height="7" x="14" y="3" rx="1" />
+        <rect width="7" height="7" x="14" y="14" rx="1" />
+        <rect width="7" height="7" x="3" y="14" rx="1" />
+    </svg>
+);
+
+const ListIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="8" y1="6" x2="21" y2="6" />
+        <line x1="8" y1="12" x2="21" y2="12" />
+        <line x1="8" y1="18" x2="21" y2="18" />
+        <line x1="3" y1="6" x2="3.01" y2="6" />
+        <line x1="3" y1="12" x2="3.01" y2="12" />
+        <line x1="3" y1="18" x2="3.01" y2="18" />
+    </svg>
+);
+
+const PlusIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M5 12h14" />
+        <path d="M12 5v14" />
+    </svg>
+);
+
+const CommentIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="cursor-pointer hover:scale-110 transition-transform">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+);
+
+const TrashIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="cursor-pointer hover:text-red-500 transition-colors">
+        <polyline points="3 6 5 6 21 6" />
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+);
+
+const MapPinIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="inline-block mr-1">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+        <circle cx="12" cy="10" r="3" />
+    </svg>
+);
+
+// Memory Map Component using Leaflet
+const MemoryMap = ({ posts, handleGridItemClick }) => {
+    const mapRef = useRef(null);
+    const mapInstance = useRef(null);
+
+    useEffect(() => {
+        if (!mapRef.current) return;
+        const postsWithCoords = posts.filter(p => p.lat && p.lon);
+        const center = postsWithCoords.length > 0 
+            ? [parseFloat(postsWithCoords[0].lat), parseFloat(postsWithCoords[0].lon)] 
+            : [13.7367, 100.5231]; // Bangkok default
+
+        mapInstance.current = L.map(mapRef.current, { 
+            center: center, 
+            zoom: postsWithCoords.length > 0 ? 11 : 6, 
+            zoomControl: true 
+        });
         
-        modalTitle.textContent = 'แก้ไขข้อมูลภารกิจ';
-        document.getElementById('task-edit-id').value = task.id;
-        document.getElementById('task-title-input').value = task.title;
-        document.getElementById('task-category-select').value = task.categoryId;
-        document.getElementById('task-status-select').value = task.status;
-        document.getElementById('task-due-input').value = task.dueDate.slice(0, 16);
-        document.getElementById('task-desc-input').value = task.description || '';
-        
-        // Fetch saved attachments to show in pending for reference
-        const attachments = await window.TaskDB.getAttachmentsForTask(taskId);
-        attachments.forEach(att => {
-            AppState.pendingFiles.push({
-                id: att.id,
-                name: att.fileName,
-                size: att.fileSize,
-                type: att.fileType,
-                isSaved: true
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+            attribution: '© OpenStreetMap contributors' 
+        }).addTo(mapInstance.current);
+
+        postsWithCoords.forEach(post => {
+            const customMarkerIcon = L.divIcon({
+                html: `<div class="relative flex items-center justify-center" style="width: 36px; height: 36px;">
+                      <div class="absolute w-8 h-8 bg-pink-500 rounded-full opacity-40 animate-ping"></div>
+                      <div class="relative w-8 h-8 rounded-full bg-gradient-to-tr from-pink-500 to-purple-600 border-2 border-white shadow-lg flex items-center justify-center text-sm">📍</div>
+                      </div>`,
+                className: 'custom-div-icon',
+                iconSize: [36, 36],
+                iconAnchor: [18, 36],
+                popupAnchor: [0, -36]
             });
+
+            const marker = L.marker([parseFloat(post.lat), parseFloat(post.lon)], { icon: customMarkerIcon }).addTo(mapInstance.current);
+            
+            const popupDiv = document.createElement('div'); 
+            popupDiv.className = "text-center p-1 cursor-pointer font-sans";
+            
+            const locTitle = document.createElement('div'); 
+            locTitle.style.cssText = "font-weight: 600; font-size: 12px; margin-bottom: 4px; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #1e293b;"; 
+            locTitle.textContent = post.location || '';
+            
+            const imgEl = document.createElement('img'); 
+            imgEl.src = post.imageUrl; 
+            imgEl.style.cssText = "width: 100px; height: 100px; object-fit: cover; border-radius: 10px; margin: 4px 0; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);";
+            
+            const actionText = document.createElement('div'); 
+            actionText.style.cssText = "font-size: 11px; color: #ec4899; font-weight: bold; margin-top: 4px;"; 
+            actionText.textContent = "แตะเพื่อวาร์ป 🚀";
+            
+            popupDiv.appendChild(locTitle); 
+            popupDiv.appendChild(imgEl); 
+            popupDiv.appendChild(actionText);
+            
+            popupDiv.addEventListener('click', () => {
+                handleGridItemClick(post.id);
+            });
+            
+            marker.bindPopup(popupDiv);
         });
-        
-        renderModalAttachments();
-    } else {
-        // Create mode
-        modalTitle.textContent = 'ลงบันทึกงานใหม่';
-        document.getElementById('task-edit-id').value = '';
-    }
-    
-    overlay.classList.add('open');
-    lucide.createIcons();
-}
 
-function closeTaskModal() {
-    document.getElementById('task-modal-overlay').classList.remove('open');
-    AppState.pendingFiles = [];
-}
+        setTimeout(() => { 
+            if (mapInstance.current) mapInstance.current.invalidateSize(); 
+        }, 400);
 
-// Handles submitting the form to IndexedDB
-async function saveTaskSubmit() {
-    const id = document.getElementById('task-edit-id').value || 'task-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-    const title = document.getElementById('task-title-input').value.trim();
-    const categoryId = document.getElementById('task-category-select').value;
-    const status = document.getElementById('task-status-select').value;
-    const dueDate = new Date(document.getElementById('task-due-input').value).toISOString();
-    const description = document.getElementById('task-desc-input').value.trim();
-    const isEdit = !!document.getElementById('task-edit-id').value;
-    
-    const originalTask = isEdit ? AppState.tasks.find(t => t.id === id) : null;
-    const createdAt = originalTask ? originalTask.createdAt : new Date().toISOString();
-    const updatedAt = new Date().toISOString();
-    
-    // Check if there are attachments
-    const hasAttachments = AppState.pendingFiles.length > 0;
-    
-    const taskData = {
-        id,
-        title,
-        categoryId,
-        status,
-        dueDate,
-        description,
-        createdAt,
-        updatedAt,
-        hasAttachments
-    };
-    
-    // 1. Save Task to IndexedDB
-    await window.TaskDB.saveTask(taskData);
-    
-    // 2. Manage attachments
-    // Find attachments to delete (if in edit mode and user removed some from UI)
-    if (isEdit) {
-        const savedAttachments = await window.TaskDB.getAttachmentsForTask(id);
-        for (const savedAtt of savedAttachments) {
-            // If saved attachment is no longer in pendingFiles list, delete it
-            if (!AppState.pendingFiles.some(f => f.id === savedAtt.id)) {
-                await window.TaskDB.deleteAttachment(savedAtt.id);
-            }
-        }
-    }
-    
-    // Upload newly added files
-    for (const pendingFile of AppState.pendingFiles) {
-        if (pendingFile.isSaved) continue; // Skip already saved ones in database
-        
-        const attachmentData = {
-            id: 'att-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
-            taskId: id,
-            fileName: pendingFile.name,
-            fileSize: pendingFile.size,
-            fileType: pendingFile.type,
-            blob: pendingFile.fileObject // Store directly as a raw Blob/File
+        return () => { 
+            if (mapInstance.current) { 
+                mapInstance.current.remove(); 
+                mapInstance.current = null; 
+            } 
         };
-        await window.TaskDB.saveAttachment(attachmentData);
-    }
-    
-    // Update local state and close
-    await loadTasks();
-    closeTaskModal();
-    
-    if (AppState.currentView === 'dashboard') {
-        renderDashboard();
-    } else {
-        renderTasksList();
-    }
-}
+    }, [posts]);
 
-// Remove task completely
-async function confirmDeleteTask(taskId, title) {
-    if (confirm(`คุณต้องการลบงาน "${title}" และเอกสารแนบทั้งหมดใช่หรือไม่?\n(การกระทำนี้ไม่สามารถย้อนคืนได้)`)) {
-        await window.TaskDB.deleteTask(taskId);
-        await loadTasks();
-        
-        if (AppState.currentView === 'dashboard') {
-            renderDashboard();
-        } else {
-            renderTasksList();
+    return (
+        <div className="p-4 h-full flex flex-col flex-1">
+            <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-3 flex items-center gap-1.5">
+                📍 แผนที่ปักหมุดบันทึกความทรงจำ ({posts.filter(p => p.lat && p.lon).length} พิกัด)
+            </h3>
+            <div ref={mapRef} className="w-full flex-1 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-inner z-0 overflow-hidden min-h-[280px]"></div>
+        </div>
+    );
+};
+
+// Post Item Component
+const PostItem = ({ post, currentUser, profiles, onDeleteClick, onLike, onCommentClick, triggerReaction, onHashtagClick, onImageClick }) => {
+    const [showHeartPop, setShowHeartPop] = useState(false);
+    const authorProfile = profiles[post.authorId] || { name: "User_" + (post.authorId?.substring(0, 6) || 'Guest'), avatarUrl: '' };
+
+    const handleDoubleTap = () => {
+        setShowHeartPop(true); 
+        setTimeout(() => setShowHeartPop(false), 800);
+        const hasLiked = post.likesList && post.likesList.includes(currentUser?.uid || 'offline_user');
+        if (!hasLiked) {
+            onLike(post.id, true);
         }
-    }
-}
+        triggerReaction('❤️');
+    };
 
-// ====================================================
-// 8. TASK DETAILS CONTROLLER & WORKFLOWS
-// ====================================================
-async function openTaskDetailsModal(taskId) {
-    const task = AppState.tasks.find(t => t.id === taskId);
-    if (!task) return;
-    
-    const cat = AppState.categories.find(c => c.id === task.categoryId) || { name: 'ทั่วไป', color: '#6b7280' };
-    const dueDetails = calculateDueDetails(task.dueDate, task.status);
-    
-    // Set static fields
-    document.getElementById('detail-task-title').textContent = task.title;
-    
-    const categoryTag = document.getElementById('detail-category-tag');
-    categoryTag.textContent = cat.name;
-    categoryTag.setAttribute('style', `--cat-bg: rgba(${hexToRgb(cat.color)}, 0.12); --cat-color: ${cat.color}; --cat-border: rgba(${hexToRgb(cat.color)}, 0.25);`);
-    
-    const statusBadge = document.getElementById('detail-status-badge');
-    statusBadge.textContent = task.status;
-    statusBadge.className = `status-badge ${getStatusClass(task.status)}`;
-    
-    document.getElementById('detail-due-value').textContent = formatDateString(task.dueDate);
-    
-    const countdownVal = document.getElementById('detail-countdown-value');
-    countdownVal.textContent = dueDetails.text;
-    countdownVal.className = `detail-meta-val ${dueDetails.class}`;
-    
-    document.getElementById('detail-created-value').textContent = formatDateString(task.createdAt);
-    document.getElementById('detail-updated-value').textContent = formatDateString(task.updatedAt);
-    document.getElementById('detail-desc-value').innerHTML = task.description ? task.description.replace(/\n/g, '<br>') : '<span style="color: var(--text-muted); font-style: italic;">ไม่มีคำอธิบายเพิ่มเติม</span>';
-    
-    // Load Attachments list with download capabilities
-    const attachments = await window.TaskDB.getAttachmentsForTask(taskId);
-    document.getElementById('detail-attachment-count-text').textContent = attachments.length + ' ไฟล์';
-    
-    const attachmentsContainer = document.getElementById('detail-attachments-container');
-    attachmentsContainer.innerHTML = '';
-    
-    let gdrivePdfId = null;
-    
-    if (attachments.length === 0) {
-        attachmentsContainer.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem; font-style: italic; padding: 0.5rem 0;">ไม่มีเอกสารแนบในงานชิ้นนี้</div>`;
-    } else {
-        attachments.forEach(att => {
-            const item = document.createElement('div');
-            item.className = 'attachment-item';
-            
-            const sizeFormatted = formatFileSize(att.fileSize);
-            
-            // Detect Google Drive attachments
-            const isGDrive = att.storageType === 'google_drive' || !!att.googleDriveFileId;
-            const isPdf = att.fileType === 'application/pdf' || att.fileName.toLowerCase().endsWith('.pdf');
-            if (isGDrive && isPdf && !gdrivePdfId) {
-                gdrivePdfId = att.googleDriveFileId;
+    const isLikedByMe = post.likesList && post.likesList.includes(currentUser?.uid || 'offline_user');
+
+    const renderCaption = (text) => {
+        if (!text) return ""; 
+        const tokens = text.split(/(\s+)/);
+        return tokens.map((token, index) => {
+            if (token.startsWith('#') && token.length > 1) {
+                return (
+                    <span 
+                        key={index} 
+                        onClick={() => onHashtagClick(token)} 
+                        className="text-blue-500 dark:text-blue-400 font-semibold cursor-pointer hover:underline"
+                    >
+                        {token}
+                    </span>
+                );
             }
-            
-            item.innerHTML = `
-                <div class="file-info">
-                    <i data-lucide="${isGDrive ? 'cloud-lightning' : 'file-check'}" class="file-icon" style="color: ${isGDrive ? 'var(--accent-earth)' : 'var(--status-done)'};"></i>
-                    <span class="file-name" title="${att.fileName}">${att.fileName}</span>
-                    <span class="file-size">(${sizeFormatted})</span>
-                </div>
-                <div class="attachment-actions">
-                    ${isGDrive ? `
-                        <a href="${att.googleDriveLink || `https://drive.google.com/file/d/${att.googleDriveFileId}/view`}" target="_blank" class="icon-btn download-btn" title="เปิดดูใน Google Drive"><i data-lucide="external-link"></i></a>
-                    ` : `
-                        <button class="icon-btn download-btn" title="ดาวน์โหลดเอกสาร"><i data-lucide="download"></i></button>
-                    `}
-                </div>
-            `;
-            
-            if (!isGDrive) {
-                // Register download function for local base64/IndexedDB binary files
-                item.querySelector('.download-btn').addEventListener('click', async () => {
-                    await downloadAttachmentFile(att.id);
-                });
-            }
-            
-            attachmentsContainer.appendChild(item);
+            return token;
         });
-    }
-    
-    // Embed Google Drive PDF Viewer iframe if a PDF file is present!
-    const previewWrapperId = 'gdrive-pdf-preview-wrapper';
-    let previewWrapper = document.getElementById(previewWrapperId);
-    if (previewWrapper) previewWrapper.remove(); // Clear old instances
-    
-    if (gdrivePdfId) {
-        previewWrapper = document.createElement('div');
-        previewWrapper.id = previewWrapperId;
-        previewWrapper.style.marginTop = '1.5rem';
-        previewWrapper.innerHTML = `
-            <div class="detail-desc-title" style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.5rem;">
-                <i data-lucide="eye" style="width: 16px; height: 16px; color: var(--accent-earth);"></i>
-                <span>พรีวิวตัวอย่างเอกสาร PDF (Google Drive)</span>
+    };
+
+    return (
+        <div id={"post-" + post.id} className="bg-white dark:bg-slate-800 border-b sm:border border-gray-100 dark:border-slate-700/80 sm:rounded-2xl overflow-hidden shadow-sm mb-4 hover:shadow-md transition-shadow duration-300">
+            {/* Post Header */}
+            <div className="flex items-center gap-3 p-3">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-pink-500 to-yellow-400 p-[2px]">
+                    {authorProfile.avatarUrl ? (
+                        <img src={authorProfile.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full border border-white dark:border-slate-800" />
+                    ) : (
+                        <div className="bg-white dark:bg-slate-700 w-full h-full rounded-full flex items-center justify-center text-xs">📸</div>
+                    )}
+                </div>
+                <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm truncate text-gray-900 dark:text-slate-100">{authorProfile.name}</div>
+                    {post.location && (
+                        <div className="text-[11px] text-pink-500 font-medium truncate">
+                            <MapPinIcon />{post.location}
+                        </div>
+                    )}
+                </div>
+                <div className="text-right shrink-0">
+                    <div className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">{post.dateString}</div>
+                </div>
+                {(!currentUser || post.authorId === currentUser?.uid || post.authorId === 'offline_user') && (
+                    <button onClick={() => onDeleteClick(post.id)} className="ml-1 text-gray-400 hover:text-red-500 p-1.5 rounded-full active:scale-95 transition-transform" title="ลบโพสต์">
+                        <TrashIcon />
+                    </button>
+                )}
             </div>
-            <iframe src="https://drive.google.com/file/d/${gdrivePdfId}/preview" class="gdrive-preview-iframe" allow="autoplay" style="border: 1px solid var(--glass-border); border-radius: 12px; width: 100%; height: 400px; background: #ffffff;"></iframe>
-        `;
-        attachmentsContainer.parentNode.appendChild(previewWrapper);
-    }
-    
-    // Wire modal buttons
-    const overlay = document.getElementById('detail-modal-overlay');
-    
-    document.getElementById('btn-close-detail-modal').onclick = () => overlay.classList.remove('open');
-    document.getElementById('btn-close-detail-footer').onclick = () => overlay.classList.remove('open');
-    
-    document.getElementById('btn-detail-edit').onclick = () => {
-        overlay.classList.remove('open');
-        openTaskModal(task.id);
-    };
-    
-    document.getElementById('btn-detail-delete').onclick = () => {
-        overlay.classList.remove('open');
-        confirmDeleteTask(task.id, task.title);
-    };
-    
-    overlay.classList.add('open');
-    lucide.createIcons();
-}
 
-// Download binary attachment from IndexedDB / Cloud Storage
-async function downloadAttachmentFile(attachmentId) {
-    const att = await window.TaskDB.getAttachment(attachmentId);
-    if (!att) {
-        alert("ไม่พบไฟล์เอกสารแนบ หรือไฟล์เกิดข้อผิดพลาด");
-        return;
-    }
-    
-    // In Firebase mode, if fetching the blob directly failed (CORS block),
-    // getAttachment will return isDirectUrl: true. We can open the link in a new tab!
-    if (att.isDirectUrl && att.downloadURL) {
-        // Open downloadURL in a new tab as fallback
-        const win = window.open(att.downloadURL, '_blank');
-        if (win) {
-            win.focus();
-        } else {
-            // Fallback to window navigation
-            window.location.href = att.downloadURL;
-        }
-        return;
-    }
+            {/* Post Image Container */}
+            <div className="relative w-full aspect-square bg-gray-55 dark:bg-slate-900 cursor-pointer overflow-hidden" onDoubleClick={handleDoubleTap}>
+                <img src={post.imageUrl} alt="Post Image" className="w-full h-full object-cover" onClick={() => onImageClick(post)} />
+                {showHeartPop && (
+                    <div className="absolute top-1/2 left-1/2 pointer-events-none animate-heart-pop drop-shadow-2xl z-10 text-red-500">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="90" height="90" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+                        </svg>
+                    </div>
+                )}
+            </div>
 
-    if (!att.blob) {
-        alert("ไม่สามารถเข้าถึงไฟล์เอกสารแนบชิ้นนี้ได้");
-        return;
-    }
-    
-    // Create an object URL from the Blob and trigger browser download
-    const url = URL.createObjectURL(att.blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = att.fileName;
-    document.body.appendChild(link);
-    link.click();
-    
-    // Cleanup URL immediately after download click
-    setTimeout(() => {
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    }, 100);
-}
-
-// ====================================================
-// 9. CATEGORY MANAGEMENT SYSTEM
-// ====================================================
-function setupCategoryForm() {
-    const picker = document.getElementById('category-color-picker');
-    picker.innerHTML = '';
-    
-    // Injects color presets circles
-    PRESETS_COLORS.forEach((color, idx) => {
-        const option = document.createElement('div');
-        option.className = `color-option ${idx === 0 ? 'selected' : ''}`;
-        option.style.backgroundColor = color;
-        option.setAttribute('style', `background-color: ${color}; --color-glow: ${color};`);
-        
-        option.addEventListener('click', () => {
-            // Remove selection of others
-            document.querySelectorAll('.color-option').forEach(el => el.classList.remove('selected'));
-            option.classList.add('selected');
-            AppState.selectedCategoryColor = color;
-        });
-        
-        picker.appendChild(option);
-    });
-    
-    AppState.selectedCategoryColor = PRESETS_COLORS[0];
-    
-    // Save button event handler
-    document.getElementById('btn-save-category').addEventListener('click', saveCategorySubmit);
-    
-    // Cancel editing
-    document.getElementById('btn-cancel-category-edit').addEventListener('click', cancelCategoryEditing);
-}
-
-function renderCategoriesList() {
-    const container = document.getElementById('categories-rows-container');
-    container.innerHTML = '';
-    
-    if (AppState.categories.length === 0) {
-        container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 0.95rem; padding: 2rem;">ไม่มีหมวดหมู่งานที่แสดงข้อมูล</div>`;
-        return;
-    }
-
-    // Render list rows of categories
-    AppState.categories.forEach(cat => {
-        const row = document.createElement('div');
-        row.className = 'category-row';
-        
-        // Count tasks belonging to this category
-        const count = AppState.tasks.filter(t => t.categoryId === cat.id).length;
-        
-        row.innerHTML = `
-            <div class="cat-row-info">
-                <div class="cat-color-dot" style="background-color: ${cat.color}; box-shadow: 0 0 8px ${cat.color};"></div>
-                <div>
-                    <div class="cat-row-name">${cat.name}</div>
-                    <div class="cat-row-meta">
-                        ${cat.isDefault ? 'หมวดหมู่การเงินเริ่มต้น' : 'หมวดหมู่สร้างเอง'} | <span>${count} งาน</span>
+            {/* Post actions & likes */}
+            <div className="p-3">
+                <div className="flex items-center justify-between mb-2.5">
+                    <div className="flex items-center gap-4.5">
+                        <button onClick={() => onLike(post.id, !isLikedByMe)} className="focus:outline-none">
+                            <HeartIcon filled={isLikedByMe} className="w-6.5 h-6.5" />
+                        </button>
+                        <button onClick={() => onCommentClick(post.id)} className="focus:outline-none text-gray-700 dark:text-slate-200">
+                            <CommentIcon />
+                        </button>
+                    </div>
+                    <div className="flex gap-1 bg-gray-100 dark:bg-slate-900/60 px-2.5 py-1 rounded-full text-xs shrink-0 select-none">
+                        {['❤️', '🔥', '😂', '🎉', '☕'].map(emoji => (
+                            <button key={emoji} onClick={() => triggerReaction(emoji)} className="hover:scale-125 active:scale-95 transition-transform px-0.5">
+                                {emoji}
+                            </button>
+                        ))}
                     </div>
                 </div>
+
+                <div className="font-bold text-xs mb-1 text-gray-900 dark:text-slate-100">
+                    {(post.likesList && post.likesList.length) || 0} ถูกใจ
+                </div>
+                <div className="text-xs text-gray-800 dark:text-slate-200 leading-relaxed">
+                    <span className="font-bold mr-2 text-gray-900 dark:text-white">{authorProfile.name}</span>
+                    <span className="whitespace-pre-wrap">{renderCaption(post.caption)}</span>
+                </div>
             </div>
-            <div class="attachment-actions">
-                <button class="icon-btn edit-cat-btn" title="แก้ไขชื่อ/สีหมวดหมู่"><i data-lucide="edit-2"></i></button>
-                ${!cat.isDefault ? `
-                    <button class="icon-btn delete-btn delete-cat-btn" title="ลบหมวดหมู่"><i data-lucide="trash-2"></i></button>
-                ` : ''}
+
+            {/* Preview Comments */}
+            <div className="px-3 pb-3 pt-1 border-t border-gray-50 dark:border-slate-700/40 bg-gray-50/50 dark:bg-slate-900/10">
+                {post.comments && post.comments.length > 0 ? (
+                    <div>
+                        <button onClick={() => onCommentClick(post.id)} className="text-[11px] text-blue-500 hover:underline mb-1 font-medium">
+                            ดูความคิดเห็นทั้งหมด {post.comments.length} รายการ
+                        </button>
+                        <div className="space-y-0.5">
+                            {post.comments.slice(-2).map(c => (
+                                <div key={c.id} className="text-[11px] text-gray-700 dark:text-slate-300">
+                                    <span className="font-bold mr-1.5 text-gray-900 dark:text-slate-200">{c.authorName || 'Guest'}</span>
+                                    <span>{c.text}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    <button onClick={() => onCommentClick(post.id)} className="text-[11px] text-gray-400 hover:text-gray-500 transition-colors">
+                        💬 ยังไม่มีความคิดเห็น... แตะเพื่อเขียนคอมเมนต์คนแรก!
+                    </button>
+                )}
             </div>
-        `;
-        
-        // Edit category click handler
-        row.querySelector('.edit-cat-btn').addEventListener('click', () => {
-            startCategoryEdit(cat);
-        });
-        
-        // Delete category click handler (only custom ones allowed to delete)
-        const delBtn = row.querySelector('.delete-cat-btn');
-        if (delBtn) {
-            delBtn.addEventListener('click', () => {
-                confirmDeleteCategory(cat.id, cat.name, count);
-            });
-        }
-        
-        container.appendChild(row);
-    });
-    
-    lucide.createIcons();
-}
+        </div>
+    );
+};
 
-function startCategoryEdit(cat) {
-    document.getElementById('cat-form-title').textContent = 'แก้ไขข้อมูลหมวดหมู่';
-    document.getElementById('category-edit-id').value = cat.id;
-    document.getElementById('category-name-input').value = cat.name;
-    
-    // Highlight correct color picker
-    document.querySelectorAll('.color-option').forEach(el => {
-        el.classList.remove('selected');
-        // Check if rgb matches hex or close representation
-        const bgCol = el.style.backgroundColor;
-        if (bgCol && (rgbToHex(bgCol) === cat.color || bgCol === cat.color)) {
-            el.classList.add('selected');
-        }
-    });
-    
-    AppState.selectedCategoryColor = cat.color;
-    document.getElementById('btn-cancel-category-edit').classList.remove('hidden');
-}
+const filters = {
+    none: { name: 'สดใส (Original)', filterStr: 'none' },
+    vintage: { name: 'วินเทจ (Vintage)', filterStr: 'sepia(0.4) contrast(1.1) brightness(0.95)' },
+    warm: { name: 'อุ่นละมุน (Warm)', filterStr: 'sepia(0.15) saturate(1.2) hue-rotate(-10deg)' },
+    cool: { name: 'เท่ สบายตา (Cool)', filterStr: 'contrast(1.05) saturate(1.1) hue-rotate(10deg)' },
+    dramatic: { name: 'ดรามาติก (Drama B&W)', filterStr: 'grayscale(1) contrast(1.25)' },
+    sepia: { name: 'ความหลัง (Sepia)', filterStr: 'sepia(0.9) brightness(0.9)' }
+};
 
-// Convert style color RGB string back to Hex
-function rgbToHex(rgb) {
-    const result = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
-    if (!result) return rgb;
-    return "#" +
-        ("0" + parseInt(result[1],10).toString(16)).slice(-2) +
-        ("0" + parseInt(result[2],10).toString(16)).slice(-2) +
-        ("0" + parseInt(result[3],10).toString(16)).slice(-2);
-}
+const themes = {
+    sakura: { name: "ซากุระ 🌸", bg: "linear-gradient(-45deg, #fbc2eb, #a6c1ee, #ffc3a0, #ffafbd)", buttonBg: "bg-pink-500 hover:bg-pink-600", textAccent: "text-pink-500" },
+    ocean: { name: "มหาสมุทร 🌊", bg: "linear-gradient(-45deg, #a1c4fd, #c2e9fb, #8fd3f4, #84fab0)", buttonBg: "bg-sky-500 hover:bg-sky-600", textAccent: "text-sky-500" },
+    matcha: { name: "มัทฉะ 🍵", bg: "linear-gradient(-45deg, #d4fc79, #96e6a1, #fff1eb, #ace0f9)", buttonBg: "bg-emerald-500 hover:bg-emerald-600", textAccent: "text-emerald-500" },
+    dark: { name: "ราตรี 🌌", bg: "linear-gradient(-45deg, #0f172a, #1e1b4b, #311042, #020617)", buttonBg: "bg-indigo-600 hover:bg-indigo-700", textAccent: "text-indigo-400" }
+};
 
-function cancelCategoryEditing() {
-    document.getElementById('cat-form-title').textContent = 'สร้างหมวดหมู่ใหม่';
-    document.getElementById('category-edit-id').value = '';
-    document.getElementById('category-name-input').value = '';
-    document.getElementById('btn-cancel-category-edit').classList.add('hidden');
+function App() {
+    const [user, setUser] = useState(null);
+    const [profiles, setProfiles] = useState({});
+    const [profile, setProfile] = useState({ name: "Guest", bio: "แต่งแต้มภาพความทรงจำ 📸", avatarUrl: "" });
+    const [posts, setPosts] = useState([]);
+    const [activeTab, setActiveTab] = useState('feed'); // feed | map | add | profile | settings
+    const [notification, setNotification] = useState('');
+    const [authLoading, setAuthLoading] = useState(true);
+    const [activeFullScreenPost, setActiveFullScreenPost] = useState(null);
     
-    // Select first preset color
-    document.querySelectorAll('.color-option').forEach(el => el.classList.remove('selected'));
-    const firstOption = document.querySelector('.color-option');
-    if (firstOption) firstOption.classList.add('selected');
-    AppState.selectedCategoryColor = PRESETS_COLORS[0];
-}
+    // Image Editor State
+    const [imagePreview, setImagePreview] = useState(null);
+    const [originalImage, setOriginalImage] = useState(null);
+    const [selectedFilter, setSelectedFilter] = useState('none');
+    const [caption, setCaption] = useState('');
+    const [location, setLocation] = useState('');
+    const [lat, setLat] = useState('');
+    const [lon, setLon] = useState('');
+    
+    // Overlays Text/Sticker Editor
+    const [editorText, setEditorText] = useState('Cafe Day! ☕');
+    const [editorTextX, setEditorTextX] = useState(50);
+    const [editorTextY, setEditorTextY] = useState(80);
+    const [editorTextSize, setEditorTextSize] = useState(26);
+    const [editorTextColor, setEditorTextColor] = useState('#ffffff');
+    
+    const [editorSticker, setEditorSticker] = useState('✨');
+    const [editorStickerX, setEditorStickerX] = useState(20);
+    const [editorStickerY, setEditorStickerY] = useState(20);
+    const [editorStickerSize, setEditorStickerSize] = useState(38);
+    
+    const [selectedElement, setSelectedElement] = useState(null); // 'text' | 'sticker' | null
 
-async function saveCategorySubmit() {
-    const name = document.getElementById('category-name-input').value.trim();
-    if (!name) {
-        alert("กรุณาระบุชื่อหมวดหมู่งาน");
-        return;
-    }
+    const [floatingEmojis, setFloatingEmojis] = useState([]);
+    const [activeCommentPostId, setActiveCommentPostId] = useState(null);
+    const [newCommentText, setNewCommentText] = useState('');
+
+    const [searchTag, setSearchTag] = useState('');
+    const [theme, setTheme] = useState(() => localStorage.getItem('app_accent_theme') || 'sakura');
     
-    const editId = document.getElementById('category-edit-id').value;
-    const id = editId || 'cat-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-    
-    const isEdit = !!editId;
-    const catData = {
-        id,
-        name,
-        color: AppState.selectedCategoryColor,
-        isDefault: isEdit ? (AppState.categories.find(c => c.id === id)?.isDefault || false) : false
+    const fileInputRef = useRef(null);
+    const editorContainerRef = useRef(null);
+
+    const currentTheme = themes[theme] || themes.sakura;
+
+    // Trigger visual notification
+    const showNotification = (msg) => {
+        setNotification(msg);
+        setTimeout(() => setNotification(''), 3000);
     };
-    
-    await window.TaskDB.saveCategory(catData);
-    await loadCategories();
-    cancelCategoryEditing();
-    renderCategoriesList();
-}
 
-async function confirmDeleteCategory(catId, name, taskCount) {
-    if (taskCount > 0) {
-        alert(`ไม่สามารถลบหมวดหมู่ "${name}" ได้ เนื่องจากยังมีงานในระบบที่ใช้งานหมวดหมู่นี้อยู่จำนวน ${taskCount} งาน\nกรุณาย้ายงานเหล่านั้นไปหมวดหมู่อื่นก่อนทำการลบ`);
-        return;
-    }
-    
-    if (confirm(`คุณต้องการลบหมวดหมู่ "${name}" ใช่หรือไม่?`)) {
-        await window.TaskDB.deleteCategory(catId);
-        await loadCategories();
-        renderCategoriesList();
-    }
-}
-
-// ====================================================
-// 10. FIREBASE CLOUD SYNC CONTROLLER
-// ====================================================
-
-// Update dynamic database mode indicators in the sidebar and other regions
-function updateDbModeUI() {
-    const dbModeEl = document.getElementById('sidebar-db-mode');
-    const dbDescEl = document.getElementById('sidebar-db-desc');
-    const mobileDbBadgeEl = document.getElementById('mobile-db-badge');
-    const mobileDbTextEl = document.getElementById('mobile-db-text');
-    
-    if (window.TaskDB.mode === 'firebase') {
-        if (dbModeEl) {
-            dbModeEl.textContent = 'Cloud Sync';
-            dbModeEl.style.background = 'rgba(115, 124, 104, 0.15)';
-            dbModeEl.style.color = 'var(--status-done)';
+    // Switch themes dynamically
+    useEffect(() => {
+        const bodyEl = document.getElementById('bg-body');
+        if (bodyEl) { 
+            bodyEl.style.background = currentTheme.bg; 
+            bodyEl.style.backgroundSize = "400% 400%"; 
         }
-        if (dbDescEl) {
-            dbDescEl.textContent = `คลาวด์เรียลไทม์ (Namespace: ${window.TaskDB.prefix})`;
-        }
-        if (mobileDbBadgeEl && mobileDbTextEl) {
-            mobileDbTextEl.textContent = 'Cloud Sync';
-            mobileDbBadgeEl.style.background = 'rgba(115, 124, 104, 0.15)';
-            mobileDbBadgeEl.style.color = 'var(--status-done)';
-            mobileDbBadgeEl.style.borderColor = 'rgba(115, 124, 104, 0.3)';
-        }
-    } else {
-        if (dbModeEl) {
-            dbModeEl.textContent = 'Local DB';
-            dbModeEl.style.background = 'rgba(181, 137, 112, 0.15)';
-            dbModeEl.style.color = 'var(--accent-earth)';
-        }
-        if (dbDescEl) {
-            dbDescEl.textContent = 'Local Storage & IndexedDB';
-        }
-        if (mobileDbBadgeEl && mobileDbTextEl) {
-            mobileDbTextEl.textContent = 'Local DB';
-            mobileDbBadgeEl.style.background = 'rgba(181, 137, 112, 0.15)';
-            mobileDbBadgeEl.style.color = 'var(--accent-earth)';
-            mobileDbBadgeEl.style.borderColor = 'rgba(181, 137, 112, 0.3)';
-        }
-    }
-}
+        localStorage.setItem('app_accent_theme', theme);
+        if (theme === 'dark') document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+    }, [theme]);
 
-// Render Firebase Settings View state
-function renderSyncSettings() {
-    const apiKeyInput = document.getElementById('sync-apiKey');
-    const authDomainInput = document.getElementById('sync-authDomain');
-    const projectIdInput = document.getElementById('sync-projectId');
-    const storageBucketInput = document.getElementById('sync-storageBucket');
-    const messagingSenderIdInput = document.getElementById('sync-messagingSenderId');
-    const appIdInput = document.getElementById('sync-appId');
-    const prefixInput = document.getElementById('sync-prefix');
-    const configJsonInput = document.getElementById('sync-config-json');
-    
-    const saveBtn = document.getElementById('btn-save-sync');
-    const disconnectBtn = document.getElementById('btn-disconnect-sync');
-    const statusCard = document.getElementById('sync-status-card');
-    const statusTitle = document.getElementById('sync-status-title');
-    const statusDesc = document.getElementById('sync-status-desc');
+    // Spawn floating up emojis
+    const triggerFloatingReaction = (emoji) => {
+        const id = Date.now() + Math.random();
+        setFloatingEmojis(prev => [...prev, { 
+            id, 
+            emoji, 
+            drift: (Math.random() * 80 - 40) + "px", 
+            x: (Math.random() * 60 + 20) + "%" 
+        }]);
+        setTimeout(() => setFloatingEmojis(prev => prev.filter(r => r.id !== id)), 3000);
+    };
 
-    // Populate current values from localStorage or active Firebase config
-    const savedConfigStr = localStorage.getItem('finance_checklist_firebase_config');
-    const isLocalOverride = localStorage.getItem('finance_checklist_local_override') === 'true';
-    const savedPrefix = localStorage.getItem('finance_checklist_firebase_prefix') || 'finance_';
-    
-    prefixInput.value = savedPrefix;
-    configJsonInput.value = '';
-
-    let config = null;
-    if (savedConfigStr) {
-        try {
-            config = JSON.parse(savedConfigStr);
-        } catch (e) {
-            console.error(e);
-        }
-    } else if (!isLocalOverride && window.TaskDB.mode === 'firebase' && window.TaskDB.firebaseApp) {
-        config = window.TaskDB.firebaseApp.options;
-    }
-
-    if (config) {
-        apiKeyInput.value = config.apiKey || '';
-        authDomainInput.value = config.authDomain || '';
-        projectIdInput.value = config.projectId || '';
-        storageBucketInput.value = config.storageBucket || '';
-        messagingSenderIdInput.value = config.messagingSenderId || '';
-        appIdInput.value = config.appId || '';
-        
-        // Set dynamic button visibility
-        disconnectBtn.classList.remove('hidden');
-    } else {
-        apiKeyInput.value = '';
-        authDomainInput.value = '';
-        projectIdInput.value = '';
-        storageBucketInput.value = '';
-        messagingSenderIdInput.value = '';
-        appIdInput.value = '';
-        disconnectBtn.classList.add('hidden');
-    }
-
-    // Render status card
-    if (window.TaskDB.mode === 'firebase') {
-        statusCard.className = 'sync-status-card status-online';
-        statusTitle.textContent = 'สถานะ: 🟢 เชื่อมต่อ Cloud สำเร็จ';
-        statusDesc.textContent = `แอปพลิเคชันกำลังเชื่อมโยงและแบ่งปันข้อมูลแบบเรียลไทม์กับทีมงานผ่านบัญชี Firebase คอนฟิกโครงการ "${window.TaskDB.firestore.app.options.projectId}" (ตารางนำหน้า: ${window.TaskDB.prefix})`;
-        
-        // Show migration option ONLY if there is data in IndexedDB
-        checkAndShowMigration();
-    } else {
-        statusCard.className = 'sync-status-card status-offline';
-        statusTitle.textContent = 'สถานะ: 🟡 โหมดใช้งานในเครื่อง (Offline Mode)';
-        statusDesc.textContent = 'ข้อมูลทั้งหมดจะถูกเซฟไว้อย่างปลอดภัยในหน่วยความจำบราวเซอร์บนคอมพิวเตอร์เครื่องนี้เท่านั้น ไม่สามารถเปิดดูจากเครื่องอื่นได้';
-        document.getElementById('sync-migration-box').classList.add('hidden');
-    }
-
-    // Render Google Drive Settings dynamically!
-    renderGDriveSettings();
-}
-
-// Check if IndexedDB has any data, if yes, show migration card in Cloud Sync view
-async function checkAndShowMigration() {
-    const migrationBox = document.getElementById('sync-migration-box');
-    try {
-        const taskCount = await window.TaskDB._transaction('tasks', 'readonly', store => store.count());
-        const catCount = await window.TaskDB._transaction('categories', 'readonly', store => store.count());
-        const attCount = await window.TaskDB._transaction('attachments', 'readonly', store => store.count());
-        
-        // Show migration card if there are tasks, attachments, or custom categories
-        if (taskCount > 0 || attCount > 0 || catCount > DEFAULT_CATEGORIES.length) {
-            migrationBox.classList.remove('hidden');
-        } else {
-            migrationBox.classList.add('hidden');
-        }
-    } catch (e) {
-        console.error("Error checking local data for migration", e);
-        migrationBox.classList.add('hidden');
-    }
-}
-
-// Setup Firebase settings forms and event listeners
-function setupSyncSettings() {
-    const configJsonInput = document.getElementById('sync-config-json');
-    const saveBtn = document.getElementById('btn-save-sync');
-    const disconnectBtn = document.getElementById('btn-disconnect-sync');
-    const migrateBtn = document.getElementById('btn-migrate-data');
-    const prefixInput = document.getElementById('sync-prefix');
-
-    // Auto-parse Firebase Config JSON if pasted
-    configJsonInput.addEventListener('input', (e) => {
-        const value = e.target.value;
-        if (!value.trim()) return;
-
-        try {
-            // Find JSON-like structure within paste
-            let jsonString = value;
-            const openBrace = value.indexOf('{');
-            const closeBrace = value.lastIndexOf('}');
-            
-            if (openBrace !== -1 && closeBrace !== -1) {
-                jsonString = value.substring(openBrace, closeBrace + 1);
-            }
-
-            // Clean up standard JS object notation to make it valid JSON
-            let cleaned = jsonString
-                .replace(/([a-zA-Z0-9_]+)\s*:/g, '"$1":') // keys
-                .replace(/'([^']*)'/g, '"$1"') // values in single quotes
-                .replace(/,\s*([}\]])/g, '$1'); // trailing commas
-
-            const config = JSON.parse(cleaned);
-            
-            if (config.apiKey && config.projectId) {
-                document.getElementById('sync-apiKey').value = config.apiKey || '';
-                document.getElementById('sync-authDomain').value = config.authDomain || '';
-                document.getElementById('sync-projectId').value = config.projectId || '';
-                document.getElementById('sync-storageBucket').value = config.storageBucket || '';
-                document.getElementById('sync-messagingSenderId').value = config.messagingSenderId || '';
-                document.getElementById('sync-appId').value = config.appId || '';
-                
-                // Show success feedback
-                configJsonInput.style.borderColor = 'var(--status-done)';
-                setTimeout(() => {
-                    configJsonInput.style.borderColor = 'var(--glass-border)';
-                }, 2000);
-            }
-        } catch (err) {
-            console.warn("Failed to auto-parse config JSON", err);
-        }
-    });
-
-    // Save Sync Connection
-    saveBtn.addEventListener('click', async () => {
-        const apiKey = document.getElementById('sync-apiKey').value.trim();
-        const authDomain = document.getElementById('sync-authDomain').value.trim();
-        const projectId = document.getElementById('sync-projectId').value.trim();
-        const storageBucket = document.getElementById('sync-storageBucket').value.trim();
-        const messagingSenderId = document.getElementById('sync-messagingSenderId').value.trim();
-        const appId = document.getElementById('sync-appId').value.trim();
-        const prefix = prefixInput.value.trim() || 'finance_';
-
-        if (!apiKey || !projectId) {
-            alert("กรุณากรอกข้อมูล apiKey และ projectId เป็นอย่างน้อย");
+    // Authentication & Firebase sync fallback
+    useEffect(() => {
+        if (!auth || !db) {
+            setAuthLoading(false);
+            loadLocalData();
             return;
         }
 
-        const config = {
-            apiKey,
-            authDomain,
-            projectId,
-            storageBucket,
-            messagingSenderId,
-            appId
+        const unsubscribe = onAuthStateChanged(auth, async (usr) => {
+            try {
+                if (usr) {
+                    setUser(usr);
+                    
+                    const googleProfile = {
+                        name: usr.displayName || "User_" + usr.uid.substring(0, 5),
+                        bio: "แต่งแต้มภาพความทรงจำ 📸 (ดึงโปรไฟล์จาก Google)",
+                        avatarUrl: usr.photoURL || ""
+                    };
+                    
+                    try {
+                        // Automatically update Firestore profile to Google profile info
+                        const profileRef = doc(db, 'profiles', usr.uid);
+                        await setDoc(profileRef, googleProfile, { merge: true });
+                    } catch (fsErr) {
+                        console.warn("Firestore profile save blocked (Permission Denied). Saving locally.", fsErr);
+                        localStorage.setItem('ig_profile_local', JSON.stringify(googleProfile));
+                    }
+                    setProfile(googleProfile);
+                } else {
+                    setUser(null);
+                    setProfile({ name: "คุณ (โหมดออฟไลน์)", bio: "เข้าสู่คลาวด์เพื่อเซฟข้ามเครื่อง 📸", avatarUrl: "" });
+                }
+            } catch (err) {
+                console.error("Auth handler error:", err);
+            } finally {
+                setAuthLoading(false);
+            }
+        });
+
+        // Set up snapshot listener for Posts
+        const postsQuery = query(collection(db, 'posts'));
+        const unsubPosts = onSnapshot(postsQuery, (snap) => {
+            const list = [];
+            snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+            // Sort descending by timestamp
+            list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            setPosts(list);
+        }, (err) => {
+            console.warn("Firestore listener failed, fallback to local storage posts.", err);
+            loadLocalData();
+        });
+
+        // Load all profiles mapping
+        const unsubProfiles = onSnapshot(collection(db, 'profiles'), (snap) => {
+            const mapping = {};
+            snap.forEach(d => { mapping[d.id] = d.data(); });
+            setProfiles(mapping);
+        });
+
+        return () => { 
+            unsubscribe(); 
+            unsubPosts(); 
+            unsubProfiles(); 
+        };
+    }, []);
+
+    const loadLocalData = () => {
+        const local = localStorage.getItem('ig_posts_local');
+        if (local) {
+            setPosts(JSON.parse(local));
+        } else {
+            setPosts([
+                { 
+                    id: 'mock_1', 
+                    imageUrl: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80', 
+                    caption: 'ยินดีต้อนรับสู่ TammadaDay Gallery! 💖 แตะหัวใจเพื่อส่งความรู้สึกร่วมได้เลยครับ #TammadaDay #แกลเลอรีความทรงจำ', 
+                    location: 'บางแสน ชลบุรี', 
+                    lat: '13.2905', 
+                    lon: '100.9080', 
+                    likesList: [], 
+                    comments: [], 
+                    dateString: new Date().toLocaleDateString('th-TH'), 
+                    timestamp: Date.now() - 100000 
+                }
+            ]);
+        }
+        const savedProfile = localStorage.getItem('ig_profile_local');
+        if (savedProfile) {
+            setProfile(JSON.parse(savedProfile));
+        }
+    };
+
+    const triggerGoogleSignIn = async () => {
+        if (!auth) return;
+        try {
+            await signInWithPopup(auth, googleProvider);
+            showNotification("🚀 เข้าสู่ระบบคลาวด์ Google สำเร็จ!");
+        } catch (e) {
+            console.error("Sign in failed:", e);
+            showNotification("❌ เชื่อมต่อ Google ล้มเหลว");
+        }
+    };
+
+    const triggerSignOut = async () => {
+        if (!auth) return;
+        try {
+            await signOut(auth);
+            showNotification("👋 ออกจากระบบเรียบร้อย");
+            loadLocalData();
+        } catch (e) {}
+    };
+
+    // Image manipulation and filters with auto-downscaling
+    const applyFilterToImage = (filterName) => {
+        setSelectedFilter(filterName);
+        if (!originalImage) return;
+        
+        const img = new Image();
+        img.src = originalImage;
+        img.onload = () => {
+            const maxDim = 800;
+            let w = img.width;
+            let h = img.height;
+            if (w > maxDim || h > maxDim) {
+                if (w > h) {
+                    h = Math.round((h * maxDim) / w);
+                    w = maxDim;
+                } else {
+                    w = Math.round((w * maxDim) / h);
+                    h = maxDim;
+                }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; 
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.filter = filters[filterName]?.filterStr || 'none';
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            setImagePreview(canvas.toDataURL('image/jpeg', 0.8));
+        };
+    };
+
+    // HTML5 Canvas generation with applied text, stickers, and downscaling for Firestore & LocalStorage compatibility
+    const handleSaveDecorations = () => {
+        if (!originalImage) return;
+        
+        const img = new Image();
+        img.src = originalImage;
+        img.onload = () => {
+            const maxDim = 800;
+            let w = img.width;
+            let h = img.height;
+            if (w > maxDim || h > maxDim) {
+                if (w > h) {
+                    h = Math.round((h * maxDim) / w);
+                    w = maxDim;
+                } else {
+                    w = Math.round((w * maxDim) / h);
+                    h = maxDim;
+                }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; 
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            
+            // 1. Draw image with filter
+            ctx.filter = filters[selectedFilter]?.filterStr || 'none';
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            // 2. Clear filter for overlays
+            ctx.filter = 'none';
+            
+            // 3. Draw text layer
+            ctx.font = `bold ${Math.round(editorTextSize * (canvas.width / 400))}px "Prompt", sans-serif`;
+            ctx.fillStyle = editorTextColor;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+            ctx.fillText(editorText, (editorTextX / 100) * canvas.width, (editorTextY / 100) * canvas.height);
+            
+            // 4. Draw sticker layer
+            ctx.font = `${Math.round(editorStickerSize * (canvas.width / 400))}px "Segoe UI Emoji", sans-serif`;
+            ctx.shadowBlur = 4;
+            ctx.fillText(editorSticker, (editorStickerX / 100) * canvas.width, (editorStickerY / 100) * canvas.height);
+            
+            const finalDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            setImagePreview(finalDataUrl);
+            showNotification("🎨 บันทึกรายละเอียดการแต่งภาพสำเร็จ!");
+            playSynthSound('like');
+        };
+    };
+
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const base64Src = event.target.result;
+            // Automatically pre-compress the image to max 800px on load to keep files lightweight
+            const img = new Image();
+            img.src = base64Src;
+            img.onload = () => {
+                const maxDim = 800;
+                let w = img.width;
+                let h = img.height;
+                if (w > maxDim || h > maxDim) {
+                    if (w > h) {
+                        h = Math.round((h * maxDim) / w);
+                        w = maxDim;
+                    } else {
+                        w = Math.round((w * maxDim) / h);
+                        h = maxDim;
+                    }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = w; 
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                
+                setImagePreview(compressedBase64);
+                setOriginalImage(compressedBase64); // Pre-compressed image becomes our baseline original
+            };
+            setSelectedFilter('none');
+        };
+        reader.readAsDataURL(file);
+    };
+
+    // Draggable Element controls on live preview container
+    const handleElementDragStart = (e, target, action) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        setSelectedElement(target);
+        
+        const container = editorContainerRef.current;
+        if (!container) return;
+        const rect = container.getBoundingClientRect();
+        
+        const isTouch = e.type.startsWith('touch');
+        const startClientX = isTouch ? e.touches[0].clientX : e.clientX;
+        const startClientY = isTouch ? e.touches[0].clientY : e.clientY;
+        
+        const startXVal = target === 'text' ? editorTextX : editorStickerX;
+        const startYVal = target === 'text' ? editorTextY : editorStickerY;
+        const startSizeVal = target === 'text' ? editorTextSize : editorStickerSize;
+        
+        const handleMove = (moveEvent) => {
+            const moveClientX = moveEvent.type.startsWith('touch') ? moveEvent.touches[0].clientX : moveEvent.clientX;
+            const moveClientY = moveEvent.type.startsWith('touch') ? moveEvent.touches[0].clientY : moveEvent.clientY;
+            
+            const deltaX = moveClientX - startClientX;
+            const deltaY = moveClientY - startClientY;
+            
+            if (action === 'move') {
+                const pctDeltaX = (deltaX / rect.width) * 100;
+                const pctDeltaY = (deltaY / rect.height) * 100;
+                
+                const newX = Math.max(5, Math.min(95, startXVal + pctDeltaX));
+                const newY = Math.max(5, Math.min(95, startYVal + pctDeltaY));
+                
+                if (target === 'text') {
+                    setEditorTextX(Math.round(newX));
+                    setEditorTextY(Math.round(newY));
+                } else {
+                    setEditorStickerX(Math.round(newX));
+                    setEditorStickerY(Math.round(newY));
+                }
+            } else if (action === 'resize') {
+                const scaleFactor = 0.5;
+                const deltaSize = (deltaX + deltaY) * scaleFactor;
+                const newSize = Math.max(12, Math.min(100, startSizeVal + deltaSize));
+                
+                if (target === 'text') {
+                    setEditorTextSize(Math.round(newSize));
+                } else {
+                    setEditorStickerSize(Math.round(newSize));
+                }
+            }
+        };
+        
+        const handleEnd = () => {
+            window.removeEventListener('mousemove', handleMove);
+            window.removeEventListener('mouseup', handleEnd);
+            window.removeEventListener('touchmove', handleMove);
+            window.removeEventListener('touchend', handleEnd);
+        };
+        
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleEnd);
+        window.addEventListener('touchmove', handleMove, { passive: false });
+        window.addEventListener('touchend', handleEnd);
+    };
+
+    // Post Submit Action
+    const handleSubmitPost = async () => {
+        if (!imagePreview) {
+            showNotification("⚠️ กรุณาเลือกรูปภาพความทรงจำ");
+            return;
+        }
+
+        const postObject = {
+            id: Date.now().toString(),
+            authorId: user ? user.uid : 'offline_user',
+            imageUrl: imagePreview,
+            caption: caption,
+            location: location,
+            lat: lat,
+            lon: lon,
+            likesList: [],
+            comments: [],
+            dateString: new Date().toLocaleDateString('th-TH'),
+            timestamp: Date.now()
         };
 
-        // Show loading state
-        saveBtn.disabled = true;
-        saveBtn.innerHTML = '<span>กำลังเชื่อมต่อ...</span>';
-
-        try {
-            // Save config to localStorage temporarily
-            localStorage.setItem('finance_checklist_firebase_config', JSON.stringify(config));
-            localStorage.setItem('finance_checklist_firebase_prefix', prefix);
-            localStorage.removeItem('finance_checklist_local_override'); // Clear local override
-
-            // Re-initialize database
-            const initMode = await window.TaskDB.init();
-
-            if (initMode === 'firebase') {
-                alert("เชื่อมต่อ Google Firebase Cloud สำเร็จแล้ว! 🎉");
-                // Reload state with new database
-                await loadCategories();
-                await loadTasks();
-                updateDbModeUI();
-                renderSyncSettings();
-            } else {
-                throw new Error("เชื่อมต่อไม่สำเร็จ");
-            }
-        } catch (e) {
-            console.error("Firebase connection error:", e);
-            alert("ไม่สามารถเชื่อมต่อ Firebase ได้ กรุณาตรวจสอบข้อมูลคีย์หรือสิทธิ์การเข้าถึงอีกครั้ง (ฐานข้อมูลถูกสลับกลับไปใช้งานในเครื่องตามเดิม)");
-            // Clean up invalid keys
-            localStorage.removeItem('finance_checklist_firebase_config');
-            window.TaskDB.mode = 'local';
-            await window.TaskDB.init();
-            updateDbModeUI();
-            renderSyncSettings();
-        } finally {
-            saveBtn.disabled = false;
-            saveBtn.innerHTML = '<i data-lucide="save"></i><span>บันทึกและเชื่อมต่อ Cloud</span>';
-            lucide.createIcons();
-        }
-    });
-
-    // Disconnect Sync Connection
-    disconnectBtn.addEventListener('click', async () => {
-        if (!confirm("คุณต้องการตัดการเชื่อมต่อกับ Cloud และสลับกลับไปใช้งานเฉพาะข้อมูลในเครื่องคอมพิวเตอร์นี้ใช่หรือไม่?")) {
-            return;
-        }
-
-        localStorage.removeItem('finance_checklist_firebase_config');
-        localStorage.setItem('finance_checklist_local_override', 'true'); // Persist local override
-        window.TaskDB.mode = 'local';
-        await window.TaskDB.init();
-
-        alert("ตัดการเชื่อมต่อคลาวด์แล้ว ระบบถูกสลับกลับไปใช้งานข้อมูลในเครื่อง IndexedDB ตามเดิม");
-        
-        await loadCategories();
-        await loadTasks();
-        updateDbModeUI();
-        renderSyncSettings();
-    });
-
-    // Migrate Local Data to Cloud
-    migrateBtn.addEventListener('click', async () => {
-        if (!confirm("คำเตือน: คุณแน่ใจหรือไม่ว่าต้องการนำส่งข้อมูลงานทั้งหมดที่เก็บอยู่ในคอมพิวเตอร์เครื่องนี้ ขึ้นไปรวมไว้บนระบบ Firebase Cloud? การซิงค์นี้อาจใช้เวลาครู่หนึ่งในกรณีที่คุณมีรูปภาพหรือเอกสารแนบหลายไฟล์")) {
-            return;
-        }
-
-        const progressContainer = document.getElementById('migration-progress-container');
-        const progressBar = document.getElementById('migration-progress-bar');
-        const progressText = document.getElementById('migration-progress-text');
-
-        migrateBtn.disabled = true;
-        progressContainer.classList.remove('hidden');
-        progressBar.style.width = '0%';
-        progressText.textContent = 'กำลังเริ่มซิงค์...';
-
-        try {
-            await window.TaskDB.migrateLocalToCloud((percent, message) => {
-                progressBar.style.width = `${percent}%`;
-                progressText.textContent = `${message} (${percent}%)`;
-            });
-
-            // Reload data after migration
-            await loadCategories();
-            await loadTasks();
-            
-            // Reload views
-            renderSyncSettings();
-            
-            alert("ระบบนำส่งและย้ายข้อมูลขึ้น Cloud เรียบร้อยสมบูรณ์แล้ว! 🚀");
-            
-            // Auto hide progress bar after 3 seconds
-            setTimeout(() => {
-                progressContainer.classList.add('hidden');
-                migrateBtn.disabled = false;
-            }, 3000);
-
-        } catch (e) {
-            console.error("Migration failed:", e);
-            alert("เกิดข้อผิดพลาดระหว่างซิงค์ข้อมูล: " + e.message);
-            migrateBtn.disabled = false;
-            progressContainer.classList.add('hidden');
-        }
-    });
-
-    // Register Google Drive form controllers
-    setupGDriveSettings();
-}
-
-/**
- * ====================================================
- * Google Drive Storage Settings Controllers (Option A)
- * ====================================================
- */
-
-// Render Google Drive settings values and live authorization states
-function renderGDriveSettings() {
-    const clientIdInput = document.getElementById('gdrive-client-id');
-    const apiKeyInput = document.getElementById('gdrive-api-key');
-    const folderIdInput = document.getElementById('gdrive-folder-id');
-
-    const saveBtn = document.getElementById('btn-save-gdrive-config');
-    const connectBtn = document.getElementById('btn-connect-gdrive');
-    const connectText = document.getElementById('txt-connect-gdrive');
-    
-    const statusCard = document.getElementById('gdrive-status-card');
-    const statusDot = document.getElementById('gdrive-status-dot');
-    const statusTitle = document.getElementById('gdrive-status-title');
-    const statusDesc = document.getElementById('gdrive-status-desc');
-
-    if (!clientIdInput || !apiKeyInput || !folderIdInput) return;
-
-    // Load configurations from global TaskDB
-    const config = window.TaskDB.gdriveConfig;
-    clientIdInput.value = config.clientId || '';
-    apiKeyInput.value = config.apiKey || '';
-    folderIdInput.value = config.folderId || '';
-
-    // Check if Google Drive access token is validated and loaded
-    const isReady = window.TaskDB.isGDriveReady();
-
-    if (isReady) {
-        statusCard.className = 'sync-status-card status-online';
-        statusDot.style.background = '#7a9a84'; // Cozy Sage Green
-        statusTitle.textContent = 'สถานะ: 🟢 เชื่อมต่อ Google Drive สำเร็จ';
-        statusDesc.textContent = 'บัญชีคลาวด์ของคุณเชื่อมต่อและพร้อมสำหรับรับอัปโหลดไฟล์เอกสารหน้างานขนาดใหญ่ (PDF) แล้ว! ไม่จำกัดโควต้า Firestore';
-        
-        connectText.textContent = 'เชื่อมต่อบัญชีใหม่ / สลับบัญชี';
-        connectBtn.style.background = 'rgba(122, 154, 132, 0.1)';
-        connectBtn.style.color = 'var(--accent-sage)';
-        connectBtn.style.borderColor = 'rgba(122, 154, 132, 0.3)';
-    } else {
-        statusCard.className = 'sync-status-card status-offline';
-        statusDot.style.background = '#e0a96d'; // Cozy Warm Sand
-        
-        if (config.clientId && config.apiKey) {
-            statusTitle.textContent = 'สถานะ: 🟡 บันทึกการตั้งค่าแล้ว (รอเชื่อมบัญชี)';
-            statusDesc.textContent = 'ข้อมูลคีย์จัดเก็บในบราวเซอร์แล้ว กรุณากดปุ่ม "ลงชื่อเข้าใช้งาน Google Drive" ด้านล่างเพื่อมอบสิทธิ์ความปลอดภัย';
-        } else {
-            statusTitle.textContent = 'สถานะ: ⚪ ยังไม่ได้ตั้งค่า Google Drive';
-            statusDesc.textContent = 'กรุณากรอก OAuth Client ID และ API Key จาก Google Cloud Console เพื่อเริ่มต้นติดตั้งระบบเก็บไฟล์ส่วนตัว';
-        }
-        
-        connectText.textContent = 'ลงชื่อเข้าใช้งาน Google Drive';
-        connectBtn.style.background = 'rgba(181, 137, 112, 0.1)';
-        connectBtn.style.color = 'var(--accent-earth)';
-        connectBtn.style.borderColor = 'rgba(181, 137, 112, 0.3)';
-    }
-}
-
-// Setup Google Drive click listener rules
-function setupGDriveSettings() {
-    const saveBtn = document.getElementById('btn-save-gdrive-config');
-    const connectBtn = document.getElementById('btn-connect-gdrive');
-
-    if (saveBtn) {
-        saveBtn.addEventListener('click', () => {
-            const clientId = document.getElementById('gdrive-client-id').value.trim();
-            const apiKey = document.getElementById('gdrive-api-key').value.trim();
-            const folderId = document.getElementById('gdrive-folder-id').value.trim();
-
-            if (!clientId || !apiKey) {
-                alert("กรุณากรอก Google Client ID และ Developer API Key ก่อนทำการบันทึก");
-                return;
-            }
-
-            window.TaskDB.saveGDriveConfig(clientId, apiKey, folderId);
-            alert("บันทึกคอนฟิกสำเร็จ! 💾\nขั้นตอนสุดท้าย: กรุณากดปุ่ม 'ลงชื่อเข้าใช้งาน Google Drive' สีส้มด้านข้าง เพื่อทำสิทธิ์ OAuth 2.0");
-            renderGDriveSettings();
-        });
-    }
-
-    if (connectBtn) {
-        connectBtn.addEventListener('click', async () => {
-            const config = window.TaskDB.gdriveConfig;
-            if (!config.clientId) {
-                alert("กรุณากรอกข้อมูล Google Client ID ด้านซ้ายมือ และกดบันทึกก่อนเชื่อมต่อ");
-                return;
-            }
-
-            connectBtn.disabled = true;
-            const originalHTML = connectBtn.innerHTML;
-            connectBtn.innerHTML = '<span>กำลังเชื่อมต่อบัญชี Google Cloud...</span>';
-
+        if (user && db) {
             try {
-                const token = await window.TaskDB.signInGDrive();
-                if (token) {
-                    alert("เชื่อมต่อบัญชี Google Drive เรียบร้อยแล้ว! 🎉 ระบบพร้อมใช้จัดเก็บไฟล์แนบทั้งหมดทันที");
-                }
-                renderGDriveSettings();
-            } catch (err) {
-                console.error("Google Drive implicit connection failure:", err);
-                alert("การเชื่อมต่อบัญชีล้มเหลว: " + err.message);
-            } finally {
-                connectBtn.disabled = false;
-                connectBtn.innerHTML = originalHTML;
-                lucide.createIcons();
+                await setDoc(doc(db, 'posts', postObject.id), postObject);
+                showNotification("🚀 อัปโหลดความทรงจำขึ้นระบบคลาวด์สำเร็จ!");
+            } catch (e) {
+                console.error(e);
+                showNotification("❌ คลาวด์ปฏิเสธการเซฟ บันทึกเก็บไว้ในเครื่องแทน");
+                saveLocalPost(postObject);
             }
+        } else {
+            saveLocalPost(postObject);
+        }
+
+        // Reset Fields
+        setCaption('');
+        setLocation('');
+        setLat('');
+        setLon('');
+        setImagePreview(null);
+        setOriginalImage(null);
+        playSynthSound('post');
+        setActiveTab('feed');
+    };
+
+    const saveLocalPost = (newPost) => {
+        const list = [newPost, ...posts];
+        setPosts(list);
+        localStorage.setItem('ig_posts_local', JSON.stringify(list));
+        showNotification("💾 บันทึกความทรงจำเก็บในคอมพิวเตอร์ของคุณสำเร็จ!");
+    };
+
+    // Like Action logic
+    const handleLikePost = async (postId, likeValue) => {
+        const targetUid = user ? user.uid : 'offline_user';
+        playSynthSound('like');
+
+        if (user && db) {
+            try {
+                const postRef = doc(db, 'posts', postId);
+                await updateDoc(postRef, {
+                    likesList: likeValue ? arrayUnion(targetUid) : arrayRemove(targetUid)
+                });
+            } catch (e) {
+                console.error("Firestore like failed, fall back locally:", e);
+                updateLocalLike(postId, targetUid, likeValue);
+            }
+        } else {
+            updateLocalLike(postId, targetUid, likeValue);
+        }
+    };
+
+    const updateLocalLike = (postId, uid, isAdd) => {
+        const updated = posts.map(p => {
+            if (p.id === postId) {
+                const list = p.likesList || [];
+                const newList = isAdd 
+                    ? [...new Set([...list, uid])] 
+                    : list.filter(item => item !== uid);
+                return { ...p, likesList: newList };
+            }
+            return p;
         });
+        setPosts(updated);
+        localStorage.setItem('ig_posts_local', JSON.stringify(updated));
+    };
+
+    // Deletion logic
+    const handleDeletePost = async (postId) => {
+        if (!confirm("คุณแน่ใจว่าต้องการลบบันทึกความทรงจำนี้?")) return;
+        playSynthSound('delete');
+
+        if (user && db) {
+            try {
+                await deleteDoc(doc(db, 'posts', postId));
+                showNotification("🗑️ ลบโพสต์ออกจากเซิร์ฟเวอร์คลาวด์เรียบร้อย");
+            } catch (e) {
+                console.error(e);
+                deleteLocalPost(postId);
+            }
+        } else {
+            deleteLocalPost(postId);
+        }
+    };
+
+    const deleteLocalPost = (postId) => {
+        const updated = posts.filter(p => p.id !== postId);
+        setPosts(updated);
+        localStorage.setItem('ig_posts_local', JSON.stringify(updated));
+        showNotification("🗑️ ลบโพสต์สำเร็จ");
+    };
+
+    // Interactive Comment system
+    const handleAddComment = async (e) => {
+        e.preventDefault();
+        if (!newCommentText.trim()) return;
+
+        const newCommentObj = {
+            id: Date.now().toString(),
+            authorId: user ? user.uid : 'offline_user',
+            authorName: profile.name || 'Anonymous',
+            text: newCommentText,
+            timestamp: Date.now()
+        };
+
+        if (user && db) {
+            try {
+                const postRef = doc(db, 'posts', activeCommentPostId);
+                await updateDoc(postRef, {
+                    comments: arrayUnion(newCommentObj)
+                });
+                setNewCommentText('');
+            } catch (err) {
+                saveLocalComment(newCommentObj);
+            }
+        } else {
+            saveLocalComment(newCommentObj);
+        }
+    };
+
+    const saveLocalComment = (comment) => {
+        const updated = posts.map(p => {
+            if (p.id === activeCommentPostId) {
+                return { ...p, comments: [...(p.comments || []), comment] };
+            }
+            return p;
+        });
+        setPosts(updated);
+        localStorage.setItem('ig_posts_local', JSON.stringify(updated));
+        setNewCommentText('');
+    };
+
+    // Profile Edit logic
+    const handleSaveProfile = async (e) => {
+        e.preventDefault();
+        localStorage.setItem('ig_profile_local', JSON.stringify(profile));
+
+        if (user && db) {
+            try {
+                await setDoc(doc(db, 'profiles', user.uid), profile);
+                showNotification("👤 อัปเดตประวัติหน้าหลักเรียบร้อย!");
+            } catch (e) {
+                showNotification("💾 เซฟการเปลี่ยนแปลงเก็บในเครื่องแล้ว");
+            }
+        } else {
+            showNotification("💾 เซฟประวัติส่วนตัวเก็บในเครื่องแล้ว");
+        }
+        setActiveTab('feed');
+    };
+
+    // Get reverse location details using nominatim OSM geocoder
+    const fetchGeocodedLocation = () => {
+        if (!navigator.geolocation) {
+            showNotification("บราวเซอร์ของคุณไม่รองรับพิกัดตำแหน่ง");
+            return;
+        }
+        showNotification("📡 กำลังพิกัดหาตำแหน่งของคุณ...");
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            const { latitude, longitude } = pos.coords;
+            setLat(latitude.toFixed(6));
+            setLon(longitude.toFixed(6));
+            
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=th`);
+                const data = await response.json();
+                if (data && data.address) {
+                    const addr = data.address;
+                    const place = data.name || addr.suburb || addr.town || addr.village || addr.city;
+                    setLocation(place || "พิกัดที่พบ");
+                    showNotification("📍 ปักหมุดระบุพิกัดสำเร็จ!");
+                }
+            } catch (e) {
+                setLocation("พิกัดแผนที่");
+            }
+        }, () => {
+            showNotification("❌ ไม่สามารถดึงพิกัดตำแหน่งได้");
+        });
+    };
+
+    // Filtered posts based on active hashtag
+    const filteredPosts = useMemo(() => {
+        if (!searchTag) return posts;
+        return posts.filter(p => p.caption && p.caption.includes(searchTag));
+    }, [posts, searchTag]);
+
+    if (authLoading) {
+        return (
+            <div class="h-full flex flex-col items-center justify-center p-6 text-center bg-slate-950 text-white w-full">
+                <div class="w-10 h-10 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <span class="text-sm font-semibold text-gray-400">กำลังเชื่อมต่อ TammadaDay Cloud...</span>
+            </div>
+        );
     }
+
+    if (!user) {
+        return (
+            <div class="h-full w-full flex flex-col items-center justify-center p-6 text-center relative overflow-hidden" style={{ background: currentTheme.bg }}>
+                {/* Ambient glowing circles */}
+                <div class="absolute w-56 h-56 rounded-full bg-pink-500/20 blur-[80px] -top-10 -left-10 animate-pulse"></div>
+                <div class="absolute w-56 h-56 rounded-full bg-purple-500/20 blur-[80px] -bottom-10 -right-10 animate-pulse"></div>
+                
+                <div class="w-full max-w-sm p-8 rounded-[2.5rem] glass-premium shadow-2xl space-y-6 flex flex-col items-center justify-center border border-white/20 relative z-10">
+                    {/* Premium Logo */}
+                    <div class="w-20 h-20 rounded-full bg-gradient-to-tr from-pink-500 via-red-500 to-purple-600 p-[3px] shadow-lg animate-bounce duration-1000">
+                        <div class="w-full h-full rounded-full bg-white dark:bg-slate-950 flex items-center justify-center text-3xl">
+                            📸
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-2">
+                        <h1 class="text-2xl font-bold bg-gradient-to-r from-pink-500 via-red-500 to-purple-600 bg-clip-text text-transparent tracking-tight">
+                            TammadaDay Gallery
+                        </h1>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 max-w-[240px] mx-auto leading-relaxed">
+                            บันทึกและแบ่งปันเสี้ยวเวลาความทรงจำอันมีค่าของคุณร่วมกับทีมแบบเรียลไทม์
+                        </p>
+                    </div>
+
+                    <button 
+                        onClick={triggerGoogleSignIn}
+                        class="w-full py-3.5 px-6 rounded-2xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 hover:border-pink-500 dark:hover:border-pink-500 hover:shadow-md shadow-sm active:scale-98 transition-all flex items-center justify-center gap-3 text-sm font-bold text-gray-700 dark:text-slate-100"
+                    >
+                        <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                        </svg>
+                        <span>เข้าสู่ระบบด้วย Google</span>
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div class="h-full flex flex-col relative w-full overflow-hidden">
+            {/* Floating Emojis Reaction layer */}
+            <div class="absolute inset-0 pointer-events-none z-50 overflow-hidden">
+                {floatingEmojis.map(item => (
+                    <div 
+                        key={item.id} 
+                        class="animate-float-up" 
+                        style={{ '--drift': item.drift, left: item.x }}
+                    >
+                        {item.emoji}
+                    </div>
+                ))}
+            </div>
+
+            {/* App Bar / Header */}
+            <header class="h-14 border-b border-gray-100 dark:border-slate-800/80 px-4 flex items-center justify-between shrink-0 bg-white/70 dark:bg-slate-900/70 z-10">
+                <div class="flex items-center gap-1.5 cursor-pointer" onClick={() => { setSearchTag(''); setActiveTab('feed'); }}>
+                    <span class="text-lg">📸</span>
+                    <h1 class="text-lg font-bold bg-gradient-to-r from-pink-500 via-red-500 to-purple-600 bg-clip-text text-transparent tracking-tight">
+                        TammadaDay Gallery
+                    </h1>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <button 
+                        onClick={() => { setTheme(theme === 'dark' ? 'sakura' : theme === 'sakura' ? 'ocean' : theme === 'ocean' ? 'matcha' : 'dark'); }} 
+                        class="w-8 h-8 rounded-full flex items-center justify-center bg-gray-100 dark:bg-slate-800 text-sm active:scale-90 transition-transform"
+                        title="สลับธีมสี"
+                    >
+                        🎨
+                    </button>
+                    {user ? (
+                        <div class="w-7 h-7 rounded-full overflow-hidden border border-pink-500 shrink-0">
+                            {profile.avatarUrl ? <img src={profile.avatarUrl} alt="User photo" class="w-full h-full object-cover" /> : <div class="bg-gray-200 w-full h-full flex items-center justify-center text-xs">👤</div>}
+                        </div>
+                    ) : (
+                        <button onClick={triggerGoogleSignIn} class="text-[11px] font-bold bg-pink-500 hover:bg-pink-600 text-white px-2.5 py-1.5 rounded-full transition-colors">
+                            เข้าสู่ระบบ
+                        </button>
+                    )}
+                </div>
+            </header>
+
+            {/* Active Hash Filter Badge */}
+            {searchTag && (
+                <div class="px-4 py-2 bg-pink-50 dark:bg-pink-950/20 text-pink-600 dark:text-pink-400 text-xs font-semibold flex justify-between items-center shrink-0">
+                    <span>🔍 แสดงโพสต์เฉพาะแฮชแท็ก: {searchTag}</span>
+                    <button onClick={() => setSearchTag('')} class="underline font-bold text-[10px] uppercase">ล้างตัวกรอง</button>
+                </div>
+            )}
+
+            {/* Main Scrolling Viewport */}
+            <div class="flex-1 overflow-y-auto no-scrollbar pb-16 bg-gray-55 dark:bg-slate-900/20">
+                {authLoading ? (
+                    <div class="flex flex-col items-center justify-center h-48">
+                        <div class="w-8 h-8 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-2"></div>
+                        <span class="text-xs text-gray-500">กำลังเชื่อมต่อ TammadaDay Cloud...</span>
+                    </div>
+                ) : activeTab === 'feed' ? (
+                    <div class="p-3 max-w-md mx-auto">
+                        {filteredPosts.length === 0 ? (
+                            <div class="text-center py-10 text-gray-400">
+                                <div class="text-3xl mb-2">📥</div>
+                                <p class="text-xs">ยังไม่มีบันทึกรูปภาพความทรงจำที่ตรงตามเงื่อนไข</p>
+                            </div>
+                        ) : (
+                            filteredPosts.map(p => (
+                                <PostItem 
+                                    key={p.id} 
+                                    post={p} 
+                                    currentUser={user} 
+                                    profiles={profiles}
+                                    onDeleteClick={handleDeletePost} 
+                                    onLike={handleLikePost} 
+                                    onCommentClick={(id) => { setActiveCommentPostId(id); }}
+                                    triggerReaction={triggerFloatingReaction}
+                                    onHashtagClick={(tag) => setSearchTag(tag)}
+                                    onImageClick={setActiveFullScreenPost}
+                                />
+                            ))
+                        )}
+                    </div>
+                ) : activeTab === 'map' ? (
+                    <MemoryMap 
+                        posts={posts} 
+                        handleGridItemClick={(postId) => {
+                            setActiveTab('feed');
+                            setTimeout(() => {
+                                const el = document.getElementById("post-" + postId);
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }, 400);
+                        }}
+                    />
+                ) : activeTab === 'add' ? (
+                    <div class="p-4 max-w-md mx-auto space-y-4">
+                        <h2 class="text-sm font-bold text-gray-500 dark:text-gray-400">🆕 โพสต์บันทึกความทรงจำใหม่</h2>
+                        
+                        {/* Photo Selector / Editor view */}
+                        <div class="space-y-2">
+                            <div 
+                                onClick={() => fileInputRef.current?.click()} 
+                                class="aspect-square w-full rounded-3xl border-2 border-dashed border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-col items-center justify-center overflow-hidden cursor-pointer relative shadow-sm"
+                            >
+                                {imagePreview ? (
+                                    <div ref={editorContainerRef} class="relative w-full h-full select-none">
+                                        <img src={imagePreview} alt="Preview" class="w-full h-full object-cover" />
+                                        
+                                        {/* Text Overlay element (Interactive) */}
+                                        <div 
+                                            onMouseDown={(e) => handleElementDragStart(e, 'text', 'move')}
+                                            onTouchStart={(e) => handleElementDragStart(e, 'text', 'move')}
+                                            style={{ left: editorTextX + '%', top: editorTextY + '%', fontSize: editorTextSize + 'px', color: editorTextColor }}
+                                            class={`absolute -translate-x-1/2 -translate-y-1/2 cursor-move font-bold px-2 py-0.5 rounded border ${selectedElement === 'text' ? 'border-pink-500 bg-black/40' : 'border-transparent'} drop-shadow-md whitespace-nowrap`}
+                                        >
+                                            {editorText}
+                                            {selectedElement === 'text' && (
+                                                <div 
+                                                    onMouseDown={(e) => handleElementDragStart(e, 'text', 'resize')}
+                                                    onTouchStart={(e) => handleElementDragStart(e, 'text', 'resize')}
+                                                    class="absolute -right-2 -bottom-2 w-4 h-4 bg-pink-500 rounded-full cursor-se-resize flex items-center justify-center text-[8px] text-white"
+                                                >
+                                                    📐
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Sticker Overlay element (Interactive) */}
+                                        <div 
+                                            onMouseDown={(e) => handleElementDragStart(e, 'sticker', 'move')}
+                                            onTouchStart={(e) => handleElementDragStart(e, 'sticker', 'move')}
+                                            style={{ left: editorStickerX + '%', top: editorStickerY + '%', fontSize: editorStickerSize + 'px' }}
+                                            class={`absolute -translate-x-1/2 -translate-y-1/2 cursor-move px-2 py-0.5 rounded border ${selectedElement === 'sticker' ? 'border-purple-500 bg-black/30' : 'border-transparent'} drop-shadow-md`}
+                                        >
+                                            {editorSticker}
+                                            {selectedElement === 'sticker' && (
+                                                <div 
+                                                    onMouseDown={(e) => handleElementDragStart(e, 'sticker', 'resize')}
+                                                    onTouchStart={(e) => handleElementDragStart(e, 'sticker', 'resize')}
+                                                    class="absolute -right-2 -bottom-2 w-4 h-4 bg-purple-500 rounded-full cursor-se-resize flex items-center justify-center text-[8px] text-white"
+                                                >
+                                                    📐
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div class="text-center p-4">
+                                        <div class="text-4xl mb-2">📸</div>
+                                        <span class="text-xs font-semibold text-gray-500">แตะตรงนี้เพื่อเลือกรูปสวยๆ</span>
+                                    </div>
+                                )}
+                                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} class="hidden" />
+                            </div>
+                            <span class="text-[10px] text-gray-400 block text-center">💡 ย้าย/ขยายขนาดตัวอักษรและสติกเกอร์ได้โดยการ แตะ/คลิกและลาก บนตัววัตถุโดยตรง</span>
+                        </div>
+
+                        {imagePreview && (
+                            <div class="space-y-3 bg-white dark:bg-slate-800 p-4 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm animate-fade-in">
+                                {/* Filter presets bar */}
+                                <div>
+                                    <label class="text-xs font-bold text-gray-400 block mb-1.5">🎨 เลือกเอฟเฟกต์ฟิลเตอร์สี</label>
+                                    <div class="flex gap-2 overflow-x-auto no-scrollbar py-1">
+                                        {Object.keys(filters).map(fKey => (
+                                            <button 
+                                                key={fKey}
+                                                onClick={() => applyFilterToImage(fKey)}
+                                                class={`px-3 py-1 rounded-full text-xs font-medium border shrink-0 transition-colors ${selectedFilter === fKey ? 'bg-pink-500 text-white border-pink-500' : 'bg-gray-55 dark:bg-slate-900 border-gray-100 dark:border-slate-700 text-gray-600 dark:text-gray-300'}`}
+                                            >
+                                                {filters[fKey].name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Overlay customization forms */}
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div class="space-y-1">
+                                        <label class="text-[11px] font-bold text-gray-400 block">✍️ คำข้อความบนภาพ</label>
+                                        <input type="text" value={editorText} onChange={e => setEditorText(e.target.value)} class="w-full px-2.5 py-1.5 rounded-xl border border-gray-100 dark:border-slate-700 bg-gray-55 dark:bg-slate-900 text-xs" />
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[11px] font-bold text-gray-400 block">⭐ สติกเกอร์ความรู้สึก</label>
+                                        <select value={editorSticker} onChange={e => setEditorSticker(e.target.value)} class="w-full px-2.5 py-1.5 rounded-xl border border-gray-100 dark:border-slate-700 bg-gray-55 dark:bg-slate-900 text-xs">
+                                            {['✨', '🔥', '🌸', '🧸', '☕', '🍰', '📍', '🌴', '🕶️', '🚀', '🤍'].map(emoji => (
+                                                <option key={emoji} value={emoji}>{emoji} สติกเกอร์ {emoji}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <button 
+                                    onClick={handleSaveDecorations} 
+                                    class="w-full py-2 rounded-2xl bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
+                                >
+                                    <span>💾 รวมรายละเอียดการแต่งภาพ</span>
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Meta form description */}
+                        <div class="space-y-3.5">
+                            <div class="space-y-1">
+                                <label class="text-xs font-bold text-gray-400 block">💬 คำบรรยายภาพความรู้สึก (Caption)</label>
+                                <textarea 
+                                    value={caption} 
+                                    onChange={e => setCaption(e.target.value)} 
+                                    rows="2.5" 
+                                    placeholder="พิมพ์บอกเล่าความรู้สึก หรือระบุแฮชแท็ก #คาเฟ่..." 
+                                    class="w-full px-3 py-2 rounded-2xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-pink-500 focus:outline-none"
+                                />
+                            </div>
+
+                            <div class="space-y-2.5">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-xs font-bold text-gray-400">📍 ข้อมูลระบุพิกัดสถานที่</label>
+                                    <button 
+                                        onClick={fetchGeocodedLocation} 
+                                        class="text-[10px] font-bold text-pink-500 hover:underline flex items-center gap-0.5"
+                                    >
+                                        <span>📡 ดึงพิกัดตาม GPS</span>
+                                    </button>
+                                </div>
+                                <input 
+                                    type="text" 
+                                    value={location} 
+                                    onChange={e => setLocation(e.target.value)} 
+                                    placeholder="เช่น หาดบางแสน, Cafe ในสวน..." 
+                                    class="w-full px-3 py-2 rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:outline-none"
+                                />
+                                <div class="grid grid-cols-2 gap-2">
+                                    <input type="number" step="any" value={lat} onChange={e => setLat(e.target.value)} placeholder="ละติจูด (Latitude)" class="px-3 py-1.5 rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] focus:outline-none" />
+                                    <input type="number" step="any" value={lon} onChange={e => setLon(e.target.value)} placeholder="ลองจิจูด (Longitude)" class="px-3 py-1.5 rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] focus:outline-none" />
+                                </div>
+                            </div>
+
+                            <button 
+                                onClick={handleSubmitPost} 
+                                class={`w-full py-3 rounded-2xl ${currentTheme.buttonBg} text-white font-bold text-sm shadow-md active:scale-98 transition-all flex items-center justify-center gap-1.5`}
+                            >
+                                <span>🚀 ปล่อยโพสต์ความทรงจำ</span>
+                            </button>
+                        </div>
+                    </div>
+                ) : activeTab === 'profile' ? (
+                    <div class="p-4 max-w-md mx-auto space-y-4 animate-fade-in">
+                        <h2 class="text-sm font-bold text-gray-500 dark:text-gray-400">👤 ประวัติส่วนตัวและบันทึกของคุณ</h2>
+                        
+                        {/* User Dashboard Card */}
+                        <div class="bg-white dark:bg-slate-800 p-5 rounded-[2rem] border border-gray-100 dark:border-slate-700/80 shadow-sm flex flex-col gap-4">
+                            <div class="flex items-center gap-4">
+                                <div class="w-16 h-16 rounded-full bg-gradient-to-tr from-pink-500 via-red-500 to-purple-600 p-[3px] shadow shrink-0">
+                                    {profile.avatarUrl ? (
+                                        <img src={profile.avatarUrl} alt="Avatar" class="w-full h-full object-cover rounded-full border border-white dark:border-slate-800" />
+                                    ) : (
+                                        <div class="bg-gray-100 dark:bg-slate-700 w-full h-full rounded-full flex items-center justify-center text-xl">👤</div>
+                                    )}
+                                </div>
+                                <div class="flex-grow min-w-0">
+                                    <h3 class="font-bold text-base truncate text-gray-900 dark:text-white leading-tight">
+                                        {profile.name}
+                                    </h3>
+                                    <p class="text-xs text-gray-400 dark:text-gray-500 truncate mb-1">
+                                        {user ? user.email : 'โหมดบันทึกส่วนตัวในเครื่อง'}
+                                    </p>
+                                    <p class="text-xs text-gray-800 dark:text-slate-300 line-clamp-2">
+                                        {profile.bio}
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            {/* Stats grid */}
+                            <div class="grid grid-cols-2 gap-2 border-t border-b border-gray-100 dark:border-slate-700/40 py-2.5 text-center">
+                                <div>
+                                    <div class="font-extrabold text-base text-pink-650 dark:text-pink-400">
+                                        {posts.filter(p => p.authorId === user?.uid || p.authorId === 'offline_user').length}
+                                    </div>
+                                    <div class="text-[10px] font-bold text-gray-400 uppercase">บันทึกของคุณ</div>
+                                </div>
+                                <div>
+                                    <div class="font-extrabold text-base text-purple-650 dark:text-purple-400">
+                                        {posts.filter(p => p.authorId === user?.uid || p.authorId === 'offline_user')
+                                             .reduce((sum, p) => sum + ((p.likesList && p.likesList.length) || 0), 0)}
+                                    </div>
+                                    <div class="text-[10px] font-bold text-gray-400 uppercase">ถูกใจที่ได้รับ</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Dynamic Post Grid section */}
+                        <div class="space-y-2">
+                            <h4 class="text-xs font-bold text-gray-400 block">🖼️ คลังรูปภาพความทรงจำของคุณ</h4>
+                            
+                            {posts.filter(p => p.authorId === user?.uid || p.authorId === 'offline_user').length === 0 ? (
+                                <div class="bg-white dark:bg-slate-800 rounded-3xl p-8 text-center border border-gray-100 dark:border-slate-700/80 shadow-sm text-gray-400">
+                                    <div class="text-3xl mb-2">📸</div>
+                                    <p class="text-xs font-semibold">คุณยังไม่ได้ปล่อยโพสต์ความทรงจำแรกเลย</p>
+                                    <button 
+                                        onClick={() => setActiveTab('add')}
+                                        class="mt-3 px-4 py-1.5 rounded-full bg-pink-500 text-white font-bold text-[11px] hover:bg-pink-600 transition-colors shadow"
+                                    >
+                                        สร้างโพสต์แรกเลย!
+                                    </button>
+                                </div>
+                            ) : (
+                                <div class="grid grid-cols-3 gap-1.5">
+                                    {posts.filter(p => p.authorId === user?.uid || p.authorId === 'offline_user').map(p => (
+                                        <div 
+                                            key={p.id} 
+                                            onClick={() => setActiveFullScreenPost(p)}
+                                            class="aspect-square rounded-2xl overflow-hidden cursor-pointer hover:opacity-85 hover:scale-[1.02] active:scale-95 transition-all shadow-sm relative group bg-gray-100 dark:bg-slate-900"
+                                        >
+                                            <img src={p.imageUrl} alt="post item" class="w-full h-full object-cover" />
+                                            <div class="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs font-bold text-white gap-1">
+                                                <span>❤️</span>
+                                                <span>{(p.likesList && p.likesList.length) || 0}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ) : activeTab === 'settings' ? (
+                    <div class="p-4 max-w-md mx-auto space-y-4">
+                        <h2 class="text-sm font-bold text-gray-500 dark:text-gray-400">⚙️ ตั้งค่าความปลอดภัยคลาวด์ Firebase</h2>
+                        
+                        <div class="bg-white dark:bg-slate-800 p-4 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm space-y-3.5">
+                            <p class="text-[11px] text-gray-400 leading-relaxed">
+                                ปรับเปลี่ยนหรือวางชุดโครงสร้าง Firebase Config ของคุณเพื่อเชื่อมข้อมูลออนไลน์ร่วมกับสมาชิกทีมคนอื่นๆ ได้อย่างอิสระ
+                            </p>
+                            
+                            <div class="space-y-1">
+                                <label class="text-xs font-bold text-gray-400 block">วางโค้ด Firebase Config (JSON)</label>
+                                <textarea 
+                                    id="firebase-config-input" 
+                                    rows="5" 
+                                    placeholder={JSON.stringify(defaultFirebaseConfig, null, 2)}
+                                    class="w-full px-3 py-2 rounded-2xl border border-gray-100 dark:border-slate-700 bg-gray-55 dark:bg-slate-900 text-[10px] font-mono"
+                                />
+                            </div>
+
+                            <button 
+                                onClick={() => {
+                                    const val = document.getElementById('firebase-config-input').value;
+                                    if (!val.trim()) {
+                                        localStorage.removeItem('custom_firebase_config_dailygallery');
+                                        showNotification("🔄 คืนค่า Firebase Config ดั้งเดิม!");
+                                        setTimeout(() => window.location.reload(), 1000);
+                                        return;
+                                    }
+                                    try {
+                                        JSON.parse(val);
+                                        localStorage.setItem('custom_firebase_config_dailygallery', val.trim());
+                                        showNotification("💾 บันทึกการตั้งค่า Firebase สำเร็จ!");
+                                        setTimeout(() => window.location.reload(), 1000);
+                                    } catch (err) {
+                                        showNotification("❌ รหัส JSON ไม่ถูกต้อง");
+                                    }
+                                }} 
+                                class={`w-full py-2 rounded-2xl ${currentTheme.buttonBg} text-white font-bold text-xs transition-colors`}
+                            >
+                                💾 เซฟการตั้งค่าคลาวด์และรีเฟรช
+                            </button>
+                        </div>
+
+                        {user && (
+                            <button 
+                                onClick={triggerSignOut} 
+                                class="w-full py-2.5 rounded-2xl border border-red-200 dark:border-red-950 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 text-xs font-bold transition-colors"
+                            >
+                                👋 ออกจากระบบบัญชี Google
+                            </button>
+                        )}
+                    </div>
+                ) : null}
+            </div>
+
+            {/* Interactive Comment Modal Drawer */}
+            {activeCommentPostId && (
+                <div class="absolute inset-0 bg-black/60 z-40 flex flex-col justify-end transition-opacity duration-300 animate-fade-in">
+                    <div class="absolute inset-0" onClick={() => setActiveCommentPostId(null)}></div>
+                    <div class="w-full max-h-[75%] rounded-t-[2.5rem] bg-white dark:bg-slate-800 z-50 p-5 flex flex-col border-t border-gray-100 dark:border-slate-700 shadow-2xl">
+                        <div class="w-12 h-1 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-4 cursor-pointer" onClick={() => setActiveCommentPostId(null)}></div>
+                        
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="font-bold text-sm text-gray-900 dark:text-white">💬 ความคิดเห็นและถกประเด็นความทรงจำ</h3>
+                            <button onClick={() => setActiveCommentPostId(null)} class="text-xs text-gray-400 font-bold hover:underline">ปิด</button>
+                        </div>
+
+                        {/* Comments list */}
+                        <div class="flex-1 overflow-y-auto space-y-3 py-2 no-scrollbar">
+                            {((posts.find(p => p.id === activeCommentPostId)?.comments) || []).length === 0 ? (
+                                <div class="text-center py-6 text-xs text-gray-400">ยังไม่มีผู้ใดแสดงความคิดเห็น... เริ่มพิมพ์เพื่อประเดิมคอมเมนต์แรกได้เลย!</div>
+                            ) : (
+                                ((posts.find(p => p.id === activeCommentPostId)?.comments) || []).map(c => (
+                                    <div key={c.id} class="text-xs bg-gray-55 dark:bg-slate-900/60 p-2.5 rounded-2xl border border-gray-100 dark:border-slate-850">
+                                        <div class="flex justify-between items-center mb-1">
+                                            <span class="font-bold text-pink-650 dark:text-pink-400">{c.authorName || 'Guest'}</span>
+                                            <span class="text-[9px] text-gray-450">{(new Date(c.timestamp || Date.now())).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.</span>
+                                        </div>
+                                        <p class="text-gray-800 dark:text-slate-200 whitespace-pre-wrap">{c.text}</p>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        {/* Write comment form */}
+                        <form onSubmit={handleAddComment} class="mt-3 flex gap-2 shrink-0">
+                            <input 
+                                type="text" 
+                                value={newCommentText} 
+                                onChange={e => setNewCommentText(e.target.value)} 
+                                placeholder="พิมพ์ความคิดเห็นของคุณที่นี่..." 
+                                class="flex-grow px-3 py-2 rounded-xl border border-gray-100 dark:border-slate-700 bg-gray-55 dark:bg-slate-900 text-xs focus:outline-none"
+                            />
+                            <button 
+                                type="submit" 
+                                class={`px-4 rounded-xl ${currentTheme.buttonBg} text-white font-bold text-xs transition-colors shrink-0`}
+                            >
+                                ส่ง
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Premium Full Screen Image Viewer Modal */}
+            {activeFullScreenPost && (
+                <div class="absolute inset-0 bg-black/95 z-50 flex flex-col items-center justify-center transition-all duration-500 animate-fade-in">
+                    {/* Close button top right */}
+                    <button 
+                        onClick={() => setActiveFullScreenPost(null)}
+                        class="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg font-bold z-50 active:scale-90 transition-transform shadow"
+                    >
+                        ✕
+                    </button>
+
+                    {/* Main High Resolution Image */}
+                    <div class="w-full max-h-[80%] flex items-center justify-center p-3 select-none">
+                        <img 
+                            src={activeFullScreenPost.imageUrl} 
+                            alt="Full screen memory view" 
+                            class="max-w-full max-h-full rounded-2xl object-contain shadow-2xl border border-white/10"
+                        />
+                    </div>
+
+                    {/* Caption Glass Overlay Card bottom */}
+                    <div class="absolute bottom-6 left-4 right-4 p-5 rounded-[2rem] bg-white/15 dark:bg-slate-900/40 backdrop-blur-xl border border-white/20 text-white space-y-3 shadow-2xl animate-slide-up">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-pink-500 to-yellow-400 p-[1.5px] shrink-0">
+                                {(profiles[activeFullScreenPost.authorId] || {}).avatarUrl ? (
+                                    <img src={(profiles[activeFullScreenPost.authorId] || {}).avatarUrl} alt="Avatar" class="w-full h-full object-cover rounded-full" />
+                                ) : (
+                                    <div class="bg-white/20 w-full h-full rounded-full flex items-center justify-center text-xs">👤</div>
+                                )}
+                            </div>
+                            <div class="flex-grow min-w-0">
+                                <div class="font-bold text-xs truncate">{(profiles[activeFullScreenPost.authorId] || {}).name || 'Guest'}</div>
+                                {activeFullScreenPost.location && (
+                                    <div class="text-[9px] text-pink-400 font-semibold truncate flex items-center gap-0.5">
+                                        <MapPinIcon />{activeFullScreenPost.location}
+                                    </div>
+                                )}
+                            </div>
+                            <span class="text-[9px] text-white/50 shrink-0 font-medium">{activeFullScreenPost.dateString}</span>
+                        </div>
+
+                        <p class="text-xs text-white/90 leading-relaxed font-medium line-clamp-3">
+                            {activeFullScreenPost.caption}
+                        </p>
+
+                        <div class="flex items-center justify-between pt-1">
+                            <div class="flex items-center gap-4 text-xs font-bold">
+                                <button 
+                                    onClick={() => {
+                                        const targetUid = user ? user.uid : 'offline_user';
+                                        const isLiked = activeFullScreenPost.likesList && activeFullScreenPost.likesList.includes(targetUid);
+                                        handleLikePost(activeFullScreenPost.id, !isLiked);
+                                        // Sync current state
+                                        setActiveFullScreenPost(prev => {
+                                            const list = prev.likesList || [];
+                                            const newList = !isLiked ? [...new Set([...list, targetUid])] : list.filter(item => item !== targetUid);
+                                            return { ...prev, likesList: newList };
+                                        });
+                                    }}
+                                    class="flex items-center gap-1 hover:scale-105 active:scale-95 transition-transform"
+                                >
+                                    <HeartIcon filled={activeFullScreenPost.likesList && activeFullScreenPost.likesList.includes(user ? user.uid : 'offline_user')} className="w-5.5 h-5.5" />
+                                    <span>{(activeFullScreenPost.likesList && activeFullScreenPost.likesList.length) || 0} ถูกใจ</span>
+                                </button>
+                                
+                                <button 
+                                    onClick={() => {
+                                        setActiveFullScreenPost(null);
+                                        setActiveCommentPostId(activeFullScreenPost.id);
+                                    }}
+                                    class="flex items-center gap-1 hover:scale-105"
+                                >
+                                    <span>💬 {activeFullScreenPost.comments ? activeFullScreenPost.comments.length : 0} คอมเมนต์</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Notification Alert banner */}
+            {notification && (
+                <div class="absolute top-16 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/85 text-white font-bold text-[11px] rounded-full drop-shadow-lg z-50 animate-bounce duration-1000 whitespace-nowrap">
+                    {notification}
+                </div>
+            )}
+
+            {/* Mobile App Shell bottom navigation menu */}
+            <nav class="h-16 border-t border-gray-100 dark:border-slate-800/80 shrink-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur flex justify-around items-center z-10">
+                <button onClick={() => { setSearchTag(''); setActiveTab('feed'); }} class={`flex flex-col items-center gap-0.5 ${activeTab === 'feed' ? currentTheme.textAccent : 'text-gray-400 dark:text-gray-500'}`}>
+                    <span class="text-lg">🏡</span>
+                    <span class="text-[9px] font-semibold">ฟีดข่าว</span>
+                </button>
+                <button onClick={() => setActiveTab('map')} class={`flex flex-col items-center gap-0.5 ${activeTab === 'map' ? currentTheme.textAccent : 'text-gray-400 dark:text-gray-500'}`}>
+                    <span class="text-lg">📍</span>
+                    <span class="text-[9px] font-semibold">ปักหมุด</span>
+                </button>
+                
+                <button onClick={() => setActiveTab('add')} class={`w-10 h-10 rounded-full bg-gradient-to-tr from-pink-500 via-red-500 to-purple-600 text-white flex items-center justify-center shadow-lg transform active:scale-90 transition-transform ${activeTab === 'add' ? 'ring-2 ring-pink-500 ring-offset-2 dark:ring-offset-slate-900' : ''}`} title="สร้างบันทึกใหม่">
+                    <PlusIcon />
+                </button>
+
+                <button onClick={() => setActiveTab('profile')} class={`flex flex-col items-center gap-0.5 ${activeTab === 'profile' ? currentTheme.textAccent : 'text-gray-400 dark:text-gray-500'}`}>
+                    <span class="text-lg">👤</span>
+                    <span class="text-[9px] font-semibold">โปรไฟล์</span>
+                </button>
+                <button onClick={() => setActiveTab('settings')} class={`flex flex-col items-center gap-0.5 ${activeTab === 'settings' ? currentTheme.textAccent : 'text-gray-400 dark:text-gray-500'}`}>
+                    <span class="text-lg">⚙️</span>
+                    <span class="text-[9px] font-semibold">ตั้งค่า</span>
+                </button>
+            </nav>
+        </div>
+    );
 }
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
