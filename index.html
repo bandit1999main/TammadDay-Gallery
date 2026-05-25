@@ -1,685 +1,1430 @@
 <!DOCTYPE html>
 <html lang="th">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบตรวจตามงานการเงิน | Financial Task Tracker</title>
-    <!-- Version 1.0.5 - Mobile Responsive Optimization - 2026-05-22 -->
-    
-    <!-- SEO Meta Tags -->
-    <meta name="description" content="ระบบติดตามงานการเงินและบัญชี ตรวจสถานะงานแบบเรียลไทม์ พร้อมแดชบอร์ดอัจฉริยะ ระบบแจ้งเตือน และระบบแนบไฟล์ส่วนตัวที่ปลอดภัยในเครื่องของคุณ">
-    <meta name="keywords" content="ติดตามงาน, บัญชีประจำวัน, บสค.60, ใบแจ้งหนี้, บัญชีประจำเดือน, ภาษีหัก ณ ที่จ่าย, ส่วนการเงิน, ตรวจงาน">
-    <meta name="author" content="Antigravity AI">
-    
-    <!-- Google Fonts (Mitr for Thai, Inter for English/Numbers) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TammadaDay Gallery - Live Cloud IG</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Mitr:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- CSS Design System -->
-    <link rel="stylesheet" href="styles.css">
-    
-    <!-- Lucide Icons (Minimalistic Modern Icons) -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <!-- Google Identity Services for OAuth 2.0 (Google Drive Integration) -->
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Leaflet Maps CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            pink: '#ec4899',
+                            purple: '#8b5cf6',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- React and Babel UMD -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { 
+            font-family: 'Prompt', 'Outfit', sans-serif; 
+            transition: background 0.8s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .app-container {
+            height: 100vh;
+            height: 100dvh;
+        }
+
+        @keyframes heartPop {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            15% { transform: translate(-50%, -50%) scale(1.25); opacity: 0.9; }
+            30% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            75% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+        }
+        .animate-heart-pop { animation: heartPop 0.75s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+        @keyframes floatingUp {
+            0% { transform: translateY(100vh) scale(0.5); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 0.8; }
+            100% { transform: translateY(-20vh) translateX(var(--drift)) scale(1.6); opacity: 0; }
+        }
+        .animate-float-up {
+            position: absolute; bottom: 0; animation: floatingUp 3s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+            pointer-events: none; z-index: 100; font-size: 2.5rem;
+        }
+
+        .bg-animated-gradient { background-size: 400% 400%; animation: gradientBG 15s ease infinite; }
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .glass-premium {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .dark .glass-premium {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+    </style>
 </head>
-<body>
 
-    <!-- Ambient Glowing Spheres (Premium Space Background Effect) -->
-    <div class="ambient-glow glow-1"></div>
-    <div class="ambient-glow glow-2"></div>
-    <div class="ambient-glow glow-3"></div>
+<body class="bg-animated-gradient min-h-screen text-gray-800 flex justify-center items-center py-0 sm:py-4" id="bg-body">
+    <div id="root" class="w-full max-w-lg app-container sm:h-[92vh] sm:rounded-[2.5rem] shadow-2xl overflow-hidden glass-premium flex flex-col relative text-gray-900 dark:text-gray-100"></div>
 
-    <!-- Mobile Sticky Top Bar (Premium App shell) -->
-    <div class="mobile-top-header">
-        <div class="mobile-logo-box">
-            <div class="mobile-logo-icon">
-                <i data-lucide="activity" style="color: white; width: 16px; height: 16px;"></i>
-            </div>
-            <span class="mobile-logo-text">FinanceTracker</span>
-        </div>
-        <div class="mobile-db-badge-container" id="mobile-db-badge">
-            <i data-lucide="database" style="width: 12px; height: 12px; margin-top: 1px;"></i>
-            <span id="mobile-db-text">Local DB</span>
-        </div>
-    </div>
+    <script type="text/babel" data-type="module">
+        // Firebase Cloud Web Imports
+        import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import {
+			getFirestore,
+			doc,
+			setDoc,
+			collection,
+			onSnapshot,
+			updateDoc,
+			deleteDoc,
+			getDocs,
+			query,
+			orderBy,
+            addDoc,
+            arrayUnion,
+            arrayRemove
+		} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    <div class="app-container">
-        
-        <!-- ====================================================
-             SIDEBAR NAVIGATION
-             ==================================================== -->
-        <aside class="sidebar">
-            <div class="sidebar-logo">
-                <div class="logo-icon">
-                    <i data-lucide="activity" style="color: white; width: 22px; height: 22px;"></i>
-                </div>
-                <div class="logo-text">FinanceTracker</div>
-            </div>
-            
-            <ul class="sidebar-menu">
-                <li class="menu-item active" id="menu-dashboard-li">
-                    <button id="btn-nav-dashboard">
-                        <i data-lucide="layout-dashboard"></i>
-                        <span>ภาพรวม (Dashboard)</span>
-                    </button>
-                </li>
-                <li class="menu-item" id="menu-tasks-li">
-                    <button id="btn-nav-tasks">
-                        <i data-lucide="check-square"></i>
-                        <span>รายการงานทั้งหมด</span>
-                    </button>
-                </li>
-                <li class="menu-item" id="menu-categories-li">
-                    <button id="btn-nav-categories">
-                        <i data-lucide="folder-kanban"></i>
-                        <span>จัดการหมวดหมู่</span>
-                    </button>
-                </li>
-                <li class="menu-item" id="menu-sync-li">
-                    <button id="btn-nav-sync">
-                        <i data-lucide="cloud-lightning"></i>
-                        <span>เชื่อมต่อ Cloud (Firebase)</span>
-                    </button>
-                </li>
-            </ul>
-            
-            <div class="sidebar-footer">
-                <div>พัฒนาโดย <span>Antigravity</span></div>
-                <div>ระบบเก็บข้อมูล: <span id="sidebar-db-mode" class="status-badge-inline" style="background: rgba(181, 137, 112, 0.1); color: var(--accent-earth); padding: 0.15rem 0.4rem; border-radius: 4px; font-weight: 600; font-size: 0.75rem;">Local DB</span></div>
-                <div style="font-size: 0.7rem; margin-top: 0.5rem; opacity: 0.5;" id="sidebar-db-desc">Local Storage & IndexedDB</div>
-            </div>
-        </aside>
+        const { useState, useEffect, useRef, useMemo } = React;
 
-        <!-- ====================================================
-             MAIN WORKSPACE AREA
-             ==================================================== -->
-        <main class="main-content">
-            
-            <!-- Dynamic Page Header -->
-            <header class="page-header">
-                <div class="header-title">
-                    <h1 id="page-title-text">ภาพรวมของงาน (Dashboard)</h1>
-                    <p id="page-subtitle-text">วิเคราะห์สถานะงานการเงิน ดำเนินการ และสถิติต่างๆ ในปัจจุบัน</p>
-                </div>
-                <div class="header-actions">
-                    <button class="btn-primary" id="btn-create-task-main">
-                        <i data-lucide="plus-circle"></i>
-                        <span>เพิ่มงานใหม่</span>
-                    </button>
-                </div>
-            </header>
+        // Default public fallback Firebase configuration for team instant sync
+        let defaultFirebaseConfig = {
+            apiKey: "AIzaSyDsRM-S1UFdXyvS7_mMMK7D4cebZsKihXc",
+            authDomain: "dailygallery-thailand.firebaseapp.com",
+            projectId: "dailygallery-thailand",
+            storageBucket: "dailygallery-thailand.firebasestorage.app",
+            messagingSenderId: "690723713618",
+            appId: "1:690723713618:web:c992cec1fb6c10c9e7e58b",
+            measurementId: "G-5EQHHE9429"
+        };
 
-            <!-- ====================================================
-                 VIEW 1: DASHBOARD
-                 ==================================================== -->
-            <section id="view-dashboard" class="fade-in">
-                <!-- Summary Statistics Grid -->
-                <div class="dashboard-grid">
+        const storedConfig = localStorage.getItem('custom_firebase_config_dailygallery');
+        let activeConfig = defaultFirebaseConfig;
+        if (storedConfig) {
+            try { activeConfig = JSON.parse(storedConfig); } catch (e) {}
+        }
+
+        let app, auth, db;
+        try {
+            if (getApps().length === 0) app = initializeApp(activeConfig);
+            else app = getApps()[0];
+            auth = getAuth(app); 
+            db = getFirestore(app);
+        } catch (e) { 
+            console.error("Firebase startup failed:", e); 
+        }
+
+        const appId = 'live-ig-app';
+        const googleProvider = new GoogleAuthProvider();
+
+        // Synthesized Retro sound effects with AudioContext
+        const playSynthSound = (type) => {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain); 
+                gain.connect(ctx.destination);
+                
+                if (type === 'like') {
+                    osc.type = 'sine'; 
+                    osc.frequency.setValueAtTime(400, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.12);
+                    gain.gain.setValueAtTime(0.1, ctx.currentTime); 
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+                    osc.start(); 
+                    osc.stop(ctx.currentTime + 0.12);
+                } else if (type === 'post') {
+                    osc.type = 'triangle'; 
+                    osc.frequency.setValueAtTime(300, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.22);
+                    gain.gain.setValueAtTime(0.15, ctx.currentTime); 
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.22);
+                    osc.start(); 
+                    osc.stop(ctx.currentTime + 0.22);
+                } else if (type === 'delete') {
+                    osc.type = 'sawtooth'; 
+                    osc.frequency.setValueAtTime(150, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.3);
+                    gain.gain.setValueAtTime(0.08, ctx.currentTime); 
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+                    osc.start(); 
+                    osc.stop(ctx.currentTime + 0.3);
+                }
+            } catch (e) {}
+        };
+
+        // Icons Components
+        const HeartIcon = ({ filled, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill={filled ? "#ef4444" : "none"} stroke={filled ? "#ef4444" : "currentColor"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={"cursor-pointer hover:scale-110 active:scale-95 transition-transform " + className}>
+                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+            </svg>
+        );
+
+        const GridIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="7" height="7" x="3" y="3" rx="1" />
+                <rect width="7" height="7" x="14" y="3" rx="1" />
+                <rect width="7" height="7" x="14" y="14" rx="1" />
+                <rect width="7" height="7" x="3" y="14" rx="1" />
+            </svg>
+        );
+
+        const ListIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="8" y1="6" x2="21" y2="6" />
+                <line x1="8" y1="12" x2="21" y2="12" />
+                <line x1="8" y1="18" x2="21" y2="18" />
+                <line x1="3" y1="6" x2="3.01" y2="6" />
+                <line x1="3" y1="12" x2="3.01" y2="12" />
+                <line x1="3" y1="18" x2="3.01" y2="18" />
+            </svg>
+        );
+
+        const PlusIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14" />
+                <path d="M12 5v14" />
+            </svg>
+        );
+
+        const CommentIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="cursor-pointer hover:scale-110 transition-transform">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+        );
+
+        const TrashIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="cursor-pointer hover:text-red-500 transition-colors">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+        );
+
+        const MapPinIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="inline-block mr-1">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                <circle cx="12" cy="10" r="3" />
+            </svg>
+        );
+
+        // Memory Map Component using Leaflet
+        const MemoryMap = ({ posts, handleGridItemClick }) => {
+            const mapRef = useRef(null);
+            const mapInstance = useRef(null);
+
+            useEffect(() => {
+                if (!mapRef.current) return;
+                const postsWithCoords = posts.filter(p => p.lat && p.lon);
+                const center = postsWithCoords.length > 0 
+                    ? [parseFloat(postsWithCoords[0].lat), parseFloat(postsWithCoords[0].lon)] 
+                    : [13.7367, 100.5231]; // Bangkok default
+
+                mapInstance.current = L.map(mapRef.current, { 
+                    center: center, 
+                    zoom: postsWithCoords.length > 0 ? 11 : 6, 
+                    zoomControl: true 
+                });
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+                    attribution: '© OpenStreetMap contributors' 
+                }).addTo(mapInstance.current);
+
+                postsWithCoords.forEach(post => {
+                    const customMarkerIcon = L.divIcon({
+                        html: `<div class="relative flex items-center justify-center" style="width: 36px; height: 36px;">
+                              <div class="absolute w-8 h-8 bg-pink-500 rounded-full opacity-40 animate-ping"></div>
+                              <div class="relative w-8 h-8 rounded-full bg-gradient-to-tr from-pink-500 to-purple-600 border-2 border-white shadow-lg flex items-center justify-center text-sm">📍</div>
+                              </div>`,
+                        className: 'custom-div-icon',
+                        iconSize: [36, 36],
+                        iconAnchor: [18, 36],
+                        popupAnchor: [0, -36]
+                    });
+
+                    const marker = L.marker([parseFloat(post.lat), parseFloat(post.lon)], { icon: customMarkerIcon }).addTo(mapInstance.current);
                     
-                    <!-- Total Tasks Card -->
-                    <div class="glass-card metric-card" style="--card-border-color: var(--primary-grad); --icon-color: var(--accent-indigo);">
-                        <div class="metric-header">
-                            <span>งานทั้งหมด</span>
-                            <div class="metric-icon-box"><i data-lucide="clipboard-list"></i></div>
-                        </div>
-                        <div class="metric-value" id="stat-total-tasks">0</div>
-                        <div class="metric-desc">จำนวนงานทั้งหมดในระบบ</div>
-                    </div>
-
-                    <!-- In Progress Card -->
-                    <div class="glass-card metric-card" style="--card-border-color: var(--status-prog); --icon-color: var(--status-prog);">
-                        <div class="metric-header">
-                            <span>กำลังทำ</span>
-                            <div class="metric-icon-box"><i data-lucide="refresh-cw"></i></div>
-                        </div>
-                        <div class="metric-value" id="stat-pending-tasks" style="color: var(--status-prog);">0</div>
-                        <div class="metric-desc">งานที่กำลังอยู่ระหว่างการจัดการ</div>
-                    </div>
-
-                    <!-- Completed Card -->
-                    <div class="glass-card metric-card" style="--card-border-color: var(--status-done); --icon-color: var(--status-done);">
-                        <div class="metric-header">
-                            <span>เสร็จแล้ว</span>
-                            <div class="metric-icon-box"><i data-lucide="check-circle-2"></i></div>
-                        </div>
-                        <div class="metric-value" id="stat-completed-tasks" style="color: var(--status-done);">0</div>
-                        <div class="metric-desc">งานที่บรรลุเป้าหมายเรียบร้อย</div>
-                    </div>
-
-                    <!-- Overdue Card -->
-                    <div class="glass-card metric-card" style="--card-border-color: var(--status-canc); --icon-color: var(--status-canc);">
-                        <div class="metric-header">
-                            <span>เกินกำหนดส่ง</span>
-                            <div class="metric-icon-box"><i data-lucide="alert-triangle"></i></div>
-                        </div>
-                        <div class="metric-value" id="stat-overdue-tasks" style="color: var(--status-canc);">0</div>
-                        <div class="metric-desc">งานเลยวันกำหนดส่งงานจริง</div>
-                    </div>
-
-                </div>
-
-                <!-- Deep Visualization Panels (Pie Chart & Workload breakdown) -->
-                <div class="dashboard-details">
+                    const popupDiv = document.createElement('div'); 
+                    popupDiv.className = "text-center p-1 cursor-pointer font-sans";
                     
-                    <!-- Status Distribution Interactive SVG Chart -->
-                    <div class="glass-card chart-section">
-                        <div class="chart-title">
-                            <i data-lucide="pie-chart" style="color: var(--accent-indigo);"></i>
-                            <span>สัดส่วนสถานะงานตามกลุ่ม</span>
+                    const locTitle = document.createElement('div'); 
+                    locTitle.style.cssText = "font-weight: 600; font-size: 12px; margin-bottom: 4px; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #1e293b;"; 
+                    locTitle.textContent = post.location || '';
+                    
+                    const imgEl = document.createElement('img'); 
+                    imgEl.src = post.imageUrl; 
+                    imgEl.style.cssText = "width: 100px; height: 100px; object-fit: cover; border-radius: 10px; margin: 4px 0; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);";
+                    
+                    const actionText = document.createElement('div'); 
+                    actionText.style.cssText = "font-size: 11px; color: #ec4899; font-weight: bold; margin-top: 4px;"; 
+                    actionText.textContent = "แตะเพื่อวาร์ป 🚀";
+                    
+                    popupDiv.appendChild(locTitle); 
+                    popupDiv.appendChild(imgEl); 
+                    popupDiv.appendChild(actionText);
+                    
+                    popupDiv.addEventListener('click', () => {
+                        handleGridItemClick(post.id);
+                    });
+                    
+                    marker.bindPopup(popupDiv);
+                });
+
+                setTimeout(() => { 
+                    if (mapInstance.current) mapInstance.current.invalidateSize(); 
+                }, 400);
+
+                return () => { 
+                    if (mapInstance.current) { 
+                        mapInstance.current.remove(); 
+                        mapInstance.current = null; 
+                    } 
+                };
+            }, [posts]);
+
+            return (
+                <div className="p-4 h-full flex flex-col flex-1">
+                    <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-3 flex items-center gap-1.5">
+                        📍 แผนที่ปักหมุดบันทึกความทรงจำ ({posts.filter(p => p.lat && p.lon).length} พิกัด)
+                    </h3>
+                    <div ref={mapRef} className="w-full flex-1 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-inner z-0 overflow-hidden min-h-[280px]"></div>
+                </div>
+            );
+        };
+
+        // Post Item Component
+        const PostItem = ({ post, currentUser, profiles, onDeleteClick, onLike, onCommentClick, triggerReaction, onHashtagClick }) => {
+            const [showHeartPop, setShowHeartPop] = useState(false);
+            const authorProfile = profiles[post.authorId] || { name: "User_" + (post.authorId?.substring(0, 6) || 'Guest'), avatarUrl: '' };
+
+            const handleDoubleTap = () => {
+                setShowHeartPop(true); 
+                setTimeout(() => setShowHeartPop(false), 800);
+                const hasLiked = post.likesList && post.likesList.includes(currentUser?.uid || 'offline_user');
+                if (!hasLiked) {
+                    onLike(post.id, true);
+                }
+                triggerReaction('❤️');
+            };
+
+            const isLikedByMe = post.likesList && post.likesList.includes(currentUser?.uid || 'offline_user');
+
+            const renderCaption = (text) => {
+                if (!text) return ""; 
+                const tokens = text.split(/(\s+)/);
+                return tokens.map((token, index) => {
+                    if (token.startsWith('#') && token.length > 1) {
+                        return (
+                            <span 
+                                key={index} 
+                                onClick={() => onHashtagClick(token)} 
+                                className="text-blue-500 dark:text-blue-400 font-semibold cursor-pointer hover:underline"
+                            >
+                                {token}
+                            </span>
+                        );
+                    }
+                    return token;
+                });
+            };
+
+            return (
+                <div id={"post-" + post.id} className="bg-white dark:bg-slate-800 border-b sm:border border-gray-100 dark:border-slate-700/80 sm:rounded-2xl overflow-hidden shadow-sm mb-4 hover:shadow-md transition-shadow duration-300">
+                    {/* Post Header */}
+                    <div className="flex items-center gap-3 p-3">
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-pink-500 to-yellow-400 p-[2px]">
+                            {authorProfile.avatarUrl ? (
+                                <img src={authorProfile.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full border border-white dark:border-slate-800" />
+                            ) : (
+                                <div className="bg-white dark:bg-slate-700 w-full h-full rounded-full flex items-center justify-center text-xs">📸</div>
+                            )}
                         </div>
-                        <div class="charts-wrapper">
-                            <div class="donut-chart-container">
-                                <svg class="donut-svg" width="200" height="200" viewBox="0 0 200 200" id="status-donut-svg">
-                                    <!-- Dynamic segments will be inserted here by JavaScript -->
+                        <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-sm truncate text-gray-900 dark:text-slate-100">{authorProfile.name}</div>
+                            {post.location && (
+                                <div className="text-[11px] text-pink-500 font-medium truncate">
+                                    <MapPinIcon />{post.location}
+                                </div>
+                            )}
+                        </div>
+                        <div className="text-right shrink-0">
+                            <div className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">{post.dateString}</div>
+                        </div>
+                        {(!currentUser || post.authorId === currentUser?.uid || post.authorId === 'offline_user') && (
+                            <button onClick={() => onDeleteClick(post.id)} className="ml-1 text-gray-400 hover:text-red-500 p-1.5 rounded-full active:scale-95 transition-transform" title="ลบโพสต์">
+                                <TrashIcon />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Post Image Container */}
+                    <div className="relative w-full aspect-square bg-gray-55 dark:bg-slate-900 cursor-pointer overflow-hidden" onDoubleClick={handleDoubleTap}>
+                        <img src={post.imageUrl} alt="Post Image" className="w-full h-full object-cover" />
+                        {showHeartPop && (
+                            <div className="absolute top-1/2 left-1/2 pointer-events-none animate-heart-pop drop-shadow-2xl z-10 text-red-500">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="90" height="90" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
                                 </svg>
-                                <div class="donut-center">
-                                    <div class="donut-center-num" id="donut-total-count">0</div>
-                                    <div class="donut-center-lbl">งานทั้งหมด</div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Post actions & likes */}
+                    <div className="p-3">
+                        <div className="flex items-center justify-between mb-2.5">
+                            <div className="flex items-center gap-4.5">
+                                <button onClick={() => onLike(post.id, !isLikedByMe)} className="focus:outline-none">
+                                    <HeartIcon filled={isLikedByMe} className="w-6.5 h-6.5" />
+                                </button>
+                                <button onClick={() => onCommentClick(post.id)} className="focus:outline-none text-gray-700 dark:text-slate-200">
+                                    <CommentIcon />
+                                </button>
+                            </div>
+                            <div className="flex gap-1 bg-gray-100 dark:bg-slate-900/60 px-2.5 py-1 rounded-full text-xs shrink-0 select-none">
+                                {['❤️', '🔥', '😂', '🎉', '☕'].map(emoji => (
+                                    <button key={emoji} onClick={() => triggerReaction(emoji)} className="hover:scale-125 active:scale-95 transition-transform px-0.5">
+                                        {emoji}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="font-bold text-xs mb-1 text-gray-900 dark:text-slate-100">
+                            {(post.likesList && post.likesList.length) || 0} ถูกใจ
+                        </div>
+                        <div className="text-xs text-gray-800 dark:text-slate-200 leading-relaxed">
+                            <span className="font-bold mr-2 text-gray-900 dark:text-white">{authorProfile.name}</span>
+                            <span className="whitespace-pre-wrap">{renderCaption(post.caption)}</span>
+                        </div>
+                    </div>
+
+                    {/* Preview Comments */}
+                    <div className="px-3 pb-3 pt-1 border-t border-gray-50 dark:border-slate-700/40 bg-gray-50/50 dark:bg-slate-900/10">
+                        {post.comments && post.comments.length > 0 ? (
+                            <div>
+                                <button onClick={() => onCommentClick(post.id)} className="text-[11px] text-blue-500 hover:underline mb-1 font-medium">
+                                    ดูความคิดเห็นทั้งหมด {post.comments.length} รายการ
+                                </button>
+                                <div className="space-y-0.5">
+                                    {post.comments.slice(-2).map(c => (
+                                        <div key={c.id} className="text-[11px] text-gray-700 dark:text-slate-300">
+                                            <span className="font-bold mr-1.5 text-gray-900 dark:text-slate-200">{c.authorName || 'Guest'}</span>
+                                            <span>{c.text}</span>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
-                            <div class="chart-legend" id="status-chart-legend">
-                                <!-- Dynamic legends will be inserted here by JavaScript -->
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Workload Breakdown By Category -->
-                    <div class="glass-card workload-section">
-                        <div class="chart-title">
-                            <i data-lucide="bar-chart-3" style="color: var(--accent-blue);"></i>
-                            <span>ภาระงานแบ่งตามหมวดหมู่ (Category Workload)</span>
-                        </div>
-                        <div class="workload-list" id="workload-breakdown-list">
-                            <!-- Dynamic category progress bars will be inserted here -->
-                        </div>
-                    </div>
-
-                    <!-- Urgent Due Date Alerts -->
-                    <div class="glass-card alert-section">
-                        <div class="chart-title" style="margin-bottom: 0.5rem;">
-                            <i data-lucide="bell" style="color: var(--warning-orange);"></i>
-                            <span>ระบบแจ้งเตือนภารกิจเร่งด่วน (Urgent & Overdue Alerts)</span>
-                        </div>
-                        <div class="alert-list" id="alert-notifications-list">
-                            <!-- Dynamic alert cards will be loaded here -->
-                        </div>
-                    </div>
-
-                </div>
-            </section>
-
-            <!-- ====================================================
-                 VIEW 2: TASK LIST & FILTERS
-                 ==================================================== -->
-            <section id="view-tasks" class="fade-in hidden">
-                <!-- Advanced Filtering and Search Bar -->
-                <div class="filter-bar">
-                    <div class="search-box">
-                        <i data-lucide="search"></i>
-                        <input type="text" id="filter-search-input" placeholder="ค้นหาชื่องาน รายละเอียด...">
-                    </div>
-                    
-                    <select class="select-filter" id="filter-status-select">
-                        <option value="all">ทุกสถานะงาน</option>
-                        <option value="รับงาน">รับงาน (Accepted)</option>
-                        <option value="กำลังทำ">กำลังทำ (In Progress)</option>
-                        <option value="เสร็จแล้ว">เสร็จแล้ว (Completed)</option>
-                        <option value="ยกเลิก">ยกเลิก (Cancelled)</option>
-                    </select>
-
-                    <select class="select-filter" id="filter-category-select">
-                        <option value="all">ทุกหมวดหมู่</option>
-                        <!-- Custom categories will be populated here -->
-                    </select>
-
-                    <select class="select-filter" id="filter-sort-select">
-                        <option value="due-asc">กำหนดส่ง: ใกล้สุดก่อน (น้อยไปมาก)</option>
-                        <option value="due-desc">กำหนดส่ง: ไกลสุดก่อน (มากไปน้อย)</option>
-                        <option value="title-asc">เรียงตามชื่อ: ก-ฮ</option>
-                        <option value="created-desc">ลงระบบล่าสุด: ก่อนไปหลัง</option>
-                    </select>
-                </div>
-
-                <!-- Grid of Task Cards -->
-                <div class="tasks-grid" id="tasks-cards-container">
-                    <!-- Dynamic task cards loaded via JS -->
-                </div>
-            </section>
-
-            <!-- ====================================================
-                 VIEW 3: CATEGORY MANAGER
-                 ==================================================== -->
-            <section id="view-categories" class="fade-in hidden">
-                <div class="glass-card category-manager-grid">
-                    
-                    <!-- Section to Add / Create custom category -->
-                    <div class="category-form-section">
-                        <div class="chart-title" style="margin-bottom: 1.5rem;">
-                            <i data-lucide="folder-plus" style="color: var(--accent-indigo);"></i>
-                            <span id="cat-form-title">สร้างหมวดหมู่ใหม่</span>
-                        </div>
-                        
-                        <input type="hidden" id="category-edit-id" value="">
-                        
-                        <div class="form-group">
-                            <label for="category-name-input">ชื่อหมวดหมู่งาน</label>
-                            <input type="text" class="form-control" id="category-name-input" placeholder="เช่น บัญชีรายรับ, ภาษีปี 69...">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>สีสัญลักษณ์ประจำหมวดหมู่</label>
-                            <div class="color-picker-grid" id="category-color-picker">
-                                <!-- Colors injected via JavaScript -->
-                            </div>
-                        </div>
-
-                        <div style="display: flex; gap: 0.75rem; margin-top: 2rem;">
-                            <button class="btn-primary" id="btn-save-category" style="flex-grow: 1;">
-                                <i data-lucide="save"></i>
-                                <span>บันทึกหมวดหมู่</span>
+                        ) : (
+                            <button onClick={() => onCommentClick(post.id)} className="text-[11px] text-gray-400 hover:text-gray-500 transition-colors">
+                                💬 ยังไม่มีความคิดเห็น... แตะเพื่อเขียนคอมเมนต์คนแรก!
                             </button>
-                            <button class="btn-secondary hidden" id="btn-cancel-category-edit">
-                                <span>ยกเลิก</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- List of current categories -->
-                    <div class="category-list-section" style="border-left: 1px solid var(--glass-border);">
-                        <div class="chart-title" style="margin-bottom: 1.5rem;">
-                            <i data-lucide="list" style="color: var(--accent-blue);"></i>
-                            <span>หมวดหมู่งานทั้งหมดในปัจจุบัน</span>
-                        </div>
-                        <div id="categories-rows-container" style="display: flex; flex-direction: column;">
-                            <!-- Injected rows of categories -->
-                        </div>
-                    </div>
-
-                </div>
-            </section>
-
-            <!-- ====================================================
-                 VIEW 4: CLOUD SYNC SETTINGS (FIREBASE)
-                 ==================================================== -->
-            <section id="view-sync" class="fade-in hidden">
-                <div class="glass-card sync-settings-container">
-                    
-                    <!-- Form Section -->
-                    <div class="sync-form-section">
-                        <div class="chart-title" style="margin-bottom: 1rem;">
-                            <i data-lucide="cloud-lightning" style="color: var(--accent-earth);"></i>
-                            <span>ตั้งค่าการเชื่อมต่อคลาวด์ (Firebase Config)</span>
-                        </div>
-                        
-                        <p class="sync-intro-text">
-                            ตั้งค่าการเชื่อมต่อเพื่อจัดเก็บและแชร์ข้อมูลงานกับทุกคนในทีมแบบเรียลไทม์ผ่าน Google Firebase ฟรี!
-                        </p>
-
-                        <!-- Config inputs -->
-                        <div class="form-group">
-                            <label for="sync-config-json">วางชุดโค้ด Firebase Config (แนะนำ - วางแล้วระบบจะเติมช่องด้านล่างให้อัตโนมัติ)</label>
-                            <textarea class="form-control" id="sync-config-json" rows="4" placeholder='วางโค้ด firebaseConfig ที่คัดลอกมาจาก Firebase Console เช่น:
-const firebaseConfig = {
-  apiKey: "AIzaSy...",
-  authDomain: "...",
-  ...
-};'></textarea>
-                        </div>
-
-                        <div class="divider-text"><span>หรือกรอกทีละช่อง</span></div>
-
-                        <div class="sync-inputs-grid">
-                            <div class="form-group">
-                                <label for="sync-apiKey">apiKey</label>
-                                <input type="text" class="form-control" id="sync-apiKey" placeholder="AIzaSy...">
-                            </div>
-                            <div class="form-group">
-                                <label for="sync-authDomain">authDomain</label>
-                                <input type="text" class="form-control" id="sync-authDomain" placeholder="xxx.firebaseapp.com">
-                            </div>
-                            <div class="form-group">
-                                <label for="sync-projectId">projectId</label>
-                                <input type="text" class="form-control" id="sync-projectId" placeholder="xxx">
-                            </div>
-                            <div class="form-group">
-                                <label for="sync-storageBucket">storageBucket</label>
-                                <input type="text" class="form-control" id="sync-storageBucket" placeholder="xxx.appspot.com">
-                            </div>
-                            <div class="form-group">
-                                <label for="sync-messagingSenderId">messagingSenderId</label>
-                                <input type="text" class="form-control" id="sync-messagingSenderId" placeholder="123456789">
-                            </div>
-                            <div class="form-group">
-                                <label for="sync-appId">appId</label>
-                                <input type="text" class="form-control" id="sync-appId" placeholder="1:12345:web:abcd...">
-                            </div>
-                        </div>
-
-                        <div class="form-group" style="margin-top: 1rem;">
-                            <label for="sync-prefix">คำนำหน้าชื่อตาราง/คอลเลกชัน (Collection Prefix - ป้องกันการชนกันของข้อมูล)</label>
-                            <input type="text" class="form-control" id="sync-prefix" placeholder="ตัวอย่างเช่น finance_" value="finance_">
-                        </div>
-
-                        <div class="sync-actions">
-                            <button class="btn-primary" id="btn-save-sync">
-                                <i data-lucide="save"></i>
-                                <span>บันทึกและเชื่อมต่อ Cloud</span>
-                            </button>
-                            <button class="btn-secondary hidden" id="btn-disconnect-sync">
-                                <i data-lucide="cloud-off"></i>
-                                <span>ตัดการเชื่อมต่อ Cloud</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Sidebar Info Section -->
-                    <div class="sync-info-section" style="border-left: 1px solid var(--glass-border);">
-                        <div class="chart-title" style="margin-bottom: 1rem;">
-                            <i data-lucide="help-circle" style="color: var(--accent-indigo);"></i>
-                            <span>คู่มือการใช้งานและสถานะ</span>
-                        </div>
-
-                        <!-- Live Status Card -->
-                        <div class="sync-status-card status-offline" id="sync-status-card">
-                            <div class="status-indicator-dot"></div>
-                            <div class="status-card-details">
-                                <div class="status-title" id="sync-status-title">สถานะ: โหมดใช้งานในเครื่อง (Offline Mode)</div>
-                                <div class="status-desc" id="sync-status-desc">ข้อมูลทั้งหมดจะถูกเซฟไว้อย่างปลอดภัยในหน่วยความจำบราวเซอร์บนคอมพิวเตอร์เครื่องนี้เท่านั้น ไม่สามารถเปิดดูจากเครื่องอื่นได้</div>
-                            </div>
-                        </div>
-
-                        <!-- Data Migration Box -->
-                        <div class="sync-migration-box hidden" id="sync-migration-box">
-                            <h5>อพยพข้อมูลเก่าขึ้นคลาวด์ (Data Migration) 🚀</h5>
-                            <p>ตรวจพบว่าคุณมีข้อมูลที่เคยจัดเก็บไว้ในคอมพิวเตอร์เครื่องนี้ ต้องการอัปโหลดขึ้นไปยัง Firebase Cloud ของทีมเพื่อไม่ให้ข้อมูลสูญหายหรือไม่?</p>
-                            <button class="btn-primary btn-full" id="btn-migrate-data">
-                                <i data-lucide="upload-cloud"></i>
-                                <span>เริ่มซิงค์ข้อมูลจากเครื่องขึ้น Cloud</span>
-                            </button>
-                            <div class="migration-progress-bar-container hidden" id="migration-progress-container">
-                                <div class="migration-progress-bar" id="migration-progress-bar" style="width: 0%;"></div>
-                                <span class="migration-progress-text" id="migration-progress-text">กำลังอัปโหลด 0%</span>
-                            </div>
-                        </div>
-
-                        <!-- Tutorial Guide -->
-                        <div class="sync-tutorial-guide">
-                            <h5>🛠️ วิธีสร้าง Firebase Project ฟรีใน 3 นาที</h5>
-                            <ol>
-                                <li>เปิดหน้าเว็บ <a href="https://console.firebase.google.com/" target="_blank" style="color: var(--accent-earth); font-weight: 600; text-decoration: underline;">Firebase Console</a> และล็อกอินด้วยบัญชี Gmail</li>
-                                <li>คลิกปุ่ม **Add project** ตั้งชื่อโครงการ (เช่น *Finance-Tracker*) แล้วดำเนินการต่อจนเสร็จสิ้น</li>
-                                <li>ในหน้าแรกของโครงการ คลิกไอคอน **Web (</>)** เพื่อสร้างเว็บแอป ตั้งชื่อแอปแล้วกด **Register app**</li>
-                                <li>คุณจะได้รับหน้าต่างโค้ดที่มีชุดข้อความ `const firebaseConfig = { ... }` ให้คัดลอกชุดโค้ดนั้นทั้งหมดมาวางในช่องซ้ายมือ แล้วกดปุ่มบันทึก!</li>
-                                <li>**สำคัญมาก:** ไปที่แถบเมนูด้านซ้ายในหน้าเว็บ Firebase Console:
-                                    <ul>
-                                        <li>เปิดบริการ **Firestore Database** -> คลิก **Create database** -> เลือกโซนเอเชีย (เช่น `asia-southeast1`) -> กดเริ่มใน **Test Mode** (โหมดทดสอบ เพื่อให้บราวเซอร์เข้าเขียน/อ่านข้อมูลได้ทันที เพื่อให้ระบบบันทึกข้อมูลและไฟล์แนบได้แบบเรียลไทม์)</li>
-                                    </ul>
-                                </li>
-                            </ol>
+                        )}
                     </div>
                 </div>
+            );
+        };
 
-                <!-- Google Drive Configuration Card (5 TB Private Storage) -->
-                <div class="glass-card gdrive-settings-container" style="margin-top: 2rem; display: grid; grid-template-columns: 1.2fr 1fr; gap: 0; padding: 0 !important; overflow: hidden;">
-                    <!-- Form Section -->
-                    <div class="sync-form-section">
-                        <div class="chart-title" style="margin-bottom: 1rem;">
-                            <i data-lucide="hard-drive" style="color: var(--accent-earth);"></i>
-                            <span>ตั้งค่าจัดเก็บเอกสารและไฟล์แนบบน Google Drive (5 TB)</span>
-                        </div>
-                        
-                        <p class="sync-intro-text" style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 0.5rem;">
-                            เชื่อมต่อกับบัญชี Google Drive ของคุณ เพื่อบันทึกรูปภาพหน้างานและไฟล์เอกสาร PDF ขนาดใหญ่จากแบบตรวจสอบ Checklist ได้โดยตรง ปลดล็อกข้อจำกัด 1MB ของ Firestore ทันที!
-                        </p>
+        const filters = {
+            none: { name: 'สดใส (Original)', filterStr: 'none' },
+            vintage: { name: 'วินเทจ (Vintage)', filterStr: 'sepia(0.4) contrast(1.1) brightness(0.95)' },
+            warm: { name: 'อุ่นละมุน (Warm)', filterStr: 'sepia(0.15) saturate(1.2) hue-rotate(-10deg)' },
+            cool: { name: 'เท่ สบายตา (Cool)', filterStr: 'contrast(1.05) saturate(1.1) hue-rotate(10deg)' },
+            dramatic: { name: 'ดรามาติก (Drama B&W)', filterStr: 'grayscale(1) contrast(1.25)' },
+            sepia: { name: 'ความหลัง (Sepia)', filterStr: 'sepia(0.9) brightness(0.9)' }
+        };
 
-                        <!-- Google Credentials Inputs -->
-                        <div class="form-group">
-                            <label for="gdrive-client-id">Google Client ID (OAuth 2.0 Client ID)</label>
-                            <input type="text" class="form-control" id="gdrive-client-id" placeholder="ตัวอย่าง: 123456-abcdef.apps.googleusercontent.com">
-                        </div>
+        const themes = {
+            sakura: { name: "ซากุระ 🌸", bg: "linear-gradient(-45deg, #fbc2eb, #a6c1ee, #ffc3a0, #ffafbd)", buttonBg: "bg-pink-500 hover:bg-pink-600", textAccent: "text-pink-500" },
+            ocean: { name: "มหาสมุทร 🌊", bg: "linear-gradient(-45deg, #a1c4fd, #c2e9fb, #8fd3f4, #84fab0)", buttonBg: "bg-sky-500 hover:bg-sky-600", textAccent: "text-sky-500" },
+            matcha: { name: "มัทฉะ 🍵", bg: "linear-gradient(-45deg, #d4fc79, #96e6a1, #fff1eb, #ace0f9)", buttonBg: "bg-emerald-500 hover:bg-emerald-600", textAccent: "text-emerald-500" },
+            dark: { name: "ราตรี 🌌", bg: "linear-gradient(-45deg, #0f172a, #1e1b4b, #311042, #020617)", buttonBg: "bg-indigo-600 hover:bg-indigo-700", textAccent: "text-indigo-400" }
+        };
 
-                        <div class="form-group">
-                            <label for="gdrive-api-key">Developer API Key</label>
-                            <input type="password" class="form-control" id="gdrive-api-key" placeholder="ป้อน Developer API Key (เพื่อความปลอดภัยรหัสจะแสดงเป็นจุด)">
-                        </div>
-
-                        <div class="form-group">
-                            <label for="gdrive-folder-id">รหัสโฟลเดอร์ Google Drive (Folder ID) - *ถ้าปล่อยว่างระบบจะอัปโหลดไว้ไดรฟ์หลัก*</label>
-                            <input type="text" class="form-control" id="gdrive-folder-id" placeholder="ตัวอย่าง: 1a2B3c4D5e6F7g8H9i0JkLmN">
-                        </div>
-
-                        <div class="sync-actions" style="margin-top: 1rem; display: flex; gap: 1rem; flex-wrap: wrap;">
-                            <button class="btn-primary" id="btn-save-gdrive-config" style="background: var(--accent-earth);">
-                                <i data-lucide="save"></i>
-                                <span>บันทึกการตั้งค่า Google Drive</span>
-                            </button>
-                            
-                            <button class="btn-secondary" id="btn-connect-gdrive" style="background: rgba(181, 137, 112, 0.1); color: var(--accent-earth); border: 1px solid rgba(181, 137, 112, 0.3);">
-                                <i data-lucide="log-in"></i>
-                                <span id="txt-connect-gdrive">ลงชื่อเข้าใช้งาน Google Drive</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Sidebar Info Section -->
-                    <div class="sync-info-section" style="border-left: 1px solid var(--glass-border);">
-                        <div class="chart-title" style="margin-bottom: 1rem;">
-                            <i data-lucide="help-circle" style="color: var(--accent-indigo);"></i>
-                            <span>สถานะและคู่มือการตั้งค่า</span>
-                        </div>
-
-                        <!-- Live Status Card for Google Drive -->
-                        <div class="sync-status-card status-offline" id="gdrive-status-card" style="border: 1px solid var(--glass-border); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
-                            <div class="status-indicator-dot" id="gdrive-status-dot" style="background: #e0a96d;"></div>
-                            <div class="status-card-details">
-                                <div class="status-title" id="gdrive-status-title" style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary);">สถานะ: ยังไม่ได้เชื่อมต่อ Google Drive</div>
-                                <div class="status-desc" id="gdrive-status-desc" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">กรุณากรอก Client ID และ API Key ด้านซ้าย กดปุ่มบันทึก จากนั้นกดปุ่มลงชื่อเข้าใช้เพื่อเปิดสิทธิ์การเข้าถึงโฟลเดอร์</div>
-                            </div>
-                        </div>
-
-                        <!-- Tutorial Guide -->
-                        <div class="sync-tutorial-guide" style="font-size: 0.8rem; background: rgba(255, 255, 255, 0.5); padding: 1rem; border-radius: 8px; border: 1px dashed rgba(181, 137, 112, 0.3);">
-                            <h5 style="font-weight: 700; margin-bottom: 0.5rem; color: var(--accent-earth);">🛠️ วิธีสร้าง Client ID & API Key ฟรีบนคลาวด์ Google</h5>
-                            <ol style="padding-left: 1rem; display: flex; flex-direction: column; gap: 0.35rem; margin: 0; font-size: 0.75rem; line-height: 1.4;">
-                                <li>เปิดหน้าเว็บ <a href="https://console.cloud.google.com/" target="_blank" style="color: var(--accent-earth); font-weight: 600; text-decoration: underline;">Google Cloud Console</a> แล้วกดล็อกอิน</li>
-                                <li>เปิดบริการ **API & Services** -> ค้นหาและกด **Enable** บริการ **Google Drive API**</li>
-                                <li>ไปที่เมนู **OAuth consent screen**:
-                                    <ul style="padding-left: 1rem; list-style-type: disc;">
-                                        <li>เลือกประเภทผู้ใช้เป็น **External** หรือ **Internal** (กรณีบัญชีบริษัทแนะนำ Internal)</li>
-                                        <li>กรอกชื่อแอปและเพิ่มอีเมลของคุณ จากนั้นกดบันทึก</li>
-                                    </ul>
-                                </li>
-                                <li>ไปที่หน้า **Credentials**:
-                                    <ul style="padding-left: 1rem; list-style-type: disc;">
-                                        <li>คลิก **Create Credentials** -> เลือก **API Key** (คัดลอกมาใส่ช่อง API Key)</li>
-                                        <li>คลิก **Create Credentials** -> เลือก **OAuth client ID** -> เลือกประเภทเป็น **Web application**</li>
-                                        <li>ในช่อง **Authorized JavaScript origins** ให้เพิ่ม URL เว็บ Checklist นี้ เช่น `https://bandit1999main.github.io` และ `http://localhost:5500`</li>
-                                    </ul>
-                                </li>
-                                <li>กดบันทึกแล้วนำ **Client ID** ยาวๆ ที่ได้มาใส่ในช่องด้านซ้าย</li>
-                            </ol>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-        </main>
-    </div>
-
-    <!-- ====================================================
-         MODAL 1: ADD & EDIT TASK MODAL
-         ==================================================== -->
-    <div class="modal-overlay" id="task-modal-overlay">
-        <div class="modal-container">
-            <div class="modal-header">
-                <h2 id="task-modal-title">ลงบันทึกงานใหม่</h2>
-                <button class="icon-btn" id="btn-close-task-modal"><i data-lucide="x"></i></button>
-            </div>
+        function App() {
+            const [user, setUser] = useState(null);
+            const [profiles, setProfiles] = useState({});
+            const [profile, setProfile] = useState({ name: "Guest", bio: "แต่งแต้มภาพความทรงจำ 📸", avatarUrl: "" });
+            const [posts, setPosts] = useState([]);
+            const [activeTab, setActiveTab] = useState('feed'); // feed | map | add | profile | settings
+            const [notification, setNotification] = useState('');
+            const [authLoading, setAuthLoading] = useState(true);
             
-            <form id="task-form" onsubmit="return false;">
-                <div class="modal-body">
-                    <input type="hidden" id="task-edit-id" value="">
-                    
-                    <!-- Task Title -->
-                    <div class="form-group">
-                        <label for="task-title-input">ชื่อหัวข้อภารกิจ <span style="color: var(--warning-red);">*</span></label>
-                        <input type="text" class="form-control" id="task-title-input" required placeholder="กรอกชื่อหัวข้องานเอกสาร หรือรายงานบัญชี...">
-                    </div>
+            // Image Editor State
+            const [imagePreview, setImagePreview] = useState(null);
+            const [originalImage, setOriginalImage] = useState(null);
+            const [selectedFilter, setSelectedFilter] = useState('none');
+            const [caption, setCaption] = useState('');
+            const [location, setLocation] = useState('');
+            const [lat, setLat] = useState('');
+            const [lon, setLon] = useState('');
+            
+            // Overlays Text/Sticker Editor
+            const [editorText, setEditorText] = useState('Cafe Day! ☕');
+            const [editorTextX, setEditorTextX] = useState(50);
+            const [editorTextY, setEditorTextY] = useState(80);
+            const [editorTextSize, setEditorTextSize] = useState(26);
+            const [editorTextColor, setEditorTextColor] = useState('#ffffff');
+            
+            const [editorSticker, setEditorSticker] = useState('✨');
+            const [editorStickerX, setEditorStickerX] = useState(20);
+            const [editorStickerY, setEditorStickerY] = useState(20);
+            const [editorStickerSize, setEditorStickerSize] = useState(38);
+            
+            const [selectedElement, setSelectedElement] = useState(null); // 'text' | 'sticker' | null
 
-                    <!-- Category Select & Status -->
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                        <div class="form-group">
-                            <label for="task-category-select">หมวดหมู่งาน <span style="color: var(--warning-red);">*</span></label>
-                            <select class="form-control" id="task-category-select" required>
-                                <!-- Categories populated via JS -->
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="task-status-select">สถานะปัจจุบัน <span style="color: var(--warning-red);">*</span></label>
-                            <select class="form-control" id="task-status-select" required>
-                                <option value="รับงาน">รับงาน (Accepted)</option>
-                                <option value="กำลังทำ">กำลังทำ (In Progress)</option>
-                                <option value="เสร็จแล้ว">เสร็จแล้ว (Completed)</option>
-                                <option value="ยกเลิก">ยกเลิก (Cancelled)</option>
-                            </select>
-                        </div>
-                    </div>
+            const [floatingEmojis, setFloatingEmojis] = useState([]);
+            const [activeCommentPostId, setActiveCommentPostId] = useState(null);
+            const [newCommentText, setNewCommentText] = useState('');
 
-                    <!-- Due Date Picker & Time -->
-                    <div class="form-group">
-                        <label for="task-due-input">กำหนดส่งงาน (Due Date & Time) <span style="color: var(--warning-red);">*</span></label>
-                        <input type="datetime-local" class="form-control" id="task-due-input" required>
-                    </div>
+            const [searchTag, setSearchTag] = useState('');
+            const [theme, setTheme] = useState(() => localStorage.getItem('app_accent_theme') || 'sakura');
+            
+            const fileInputRef = useRef(null);
+            const editorContainerRef = useRef(null);
 
-                    <!-- Task Description -->
-                    <div class="form-group">
-                        <label for="task-desc-input">คำอธิบาย/รายละเอียดงานเพิ่มเติม</label>
-                        <textarea class="form-control" id="task-desc-input" rows="3" placeholder="ระบุสิ่งที่ต้องทำ รายละเอียด หรือผู้ประสานงาน..."></textarea>
-                    </div>
+            const currentTheme = themes[theme] || themes.sakura;
 
-                    <!-- Drag and Drop File Uploader -->
-                    <div class="form-group">
-                        <label>เอกสารและไฟล์แนบประกอบ (เก็บบน IndexedDB ในคอมพิวเตอร์ของคุณ)</label>
-                        <div class="drag-drop-zone" id="task-drag-drop-zone">
-                            <i data-lucide="upload-cloud" class="drag-drop-icon"></i>
-                            <div style="font-weight: 600; font-size: 0.9rem;">ลากไฟล์มาวางตรงนี้ หรือคลิกเพื่ออัปโหลด</div>
-                            <div style="font-size: 0.75rem; color: var(--text-muted);">รองรับเอกสารบัญชี PDF, Word, Excel, รูปภาพขนาดใหญ่</div>
-                            <input type="file" id="task-file-input" class="file-input-hidden" multiple>
-                        </div>
-                        <!-- Current Files Container -->
-                        <div class="attachments-list" id="modal-attachments-list">
-                            <!-- Attachments populated here -->
-                        </div>
-                    </div>
-                </div>
+            // Trigger visual notification
+            const showNotification = (msg) => {
+                setNotification(msg);
+                setTimeout(() => setNotification(''), 3000);
+            };
+
+            // Switch themes dynamically
+            useEffect(() => {
+                const bodyEl = document.getElementById('bg-body');
+                if (bodyEl) { 
+                    bodyEl.style.background = currentTheme.bg; 
+                    bodyEl.style.backgroundSize = "400% 400%"; 
+                }
+                localStorage.setItem('app_accent_theme', theme);
+                if (theme === 'dark') document.documentElement.classList.add('dark');
+                else document.documentElement.classList.remove('dark');
+            }, [theme]);
+
+            // Spawn floating up emojis
+            const triggerFloatingReaction = (emoji) => {
+                const id = Date.now() + Math.random();
+                setFloatingEmojis(prev => [...prev, { 
+                    id, 
+                    emoji, 
+                    drift: (Math.random() * 80 - 40) + "px", 
+                    x: (Math.random() * 60 + 20) + "%" 
+                }]);
+                setTimeout(() => setFloatingEmojis(prev => prev.filter(r => r.id !== id)), 3000);
+            };
+
+            // Authentication & Firebase sync fallback
+            useEffect(() => {
+                if (!auth || !db) {
+                    setAuthLoading(false);
+                    loadLocalData();
+                    return;
+                }
+
+                const unsubscribe = onAuthStateChanged(auth, async (usr) => {
+                    if (usr) {
+                        setUser(usr);
+                        // Setup Realtime profile
+                        const profileRef = doc(db, 'profiles', usr.uid);
+                        onSnapshot(profileRef, (snap) => {
+                            if (snap.exists()) {
+                                setProfile(snap.data());
+                            } else {
+                                const initial = { 
+                                    name: usr.displayName || "User_" + usr.uid.substring(0, 5), 
+                                    bio: "สวัสดีชาว TammadaDay! 📸", 
+                                    avatarUrl: usr.photoURL || "" 
+                                };
+                                setDoc(profileRef, initial);
+                                setProfile(initial);
+                            }
+                        });
+                    } else {
+                        setUser(null);
+                        setProfile({ name: "คุณ (โหมดออฟไลน์)", bio: "เข้าสู่คลาวด์เพื่อเซฟข้ามเครื่อง 📸", avatarUrl: "" });
+                    }
+                    setAuthLoading(false);
+                });
+
+                // Set up snapshot listener for Posts
+                const postsQuery = query(collection(db, 'posts'));
+                const unsubPosts = onSnapshot(postsQuery, (snap) => {
+                    const list = [];
+                    snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+                    // Sort descending by timestamp
+                    list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                    setPosts(list);
+                }, (err) => {
+                    console.warn("Firestore listener failed, fallback to local storage posts.", err);
+                    loadLocalData();
+                });
+
+                // Load all profiles mapping
+                const unsubProfiles = onSnapshot(collection(db, 'profiles'), (snap) => {
+                    const mapping = {};
+                    snap.forEach(d => { mapping[d.id] = d.data(); });
+                    setProfiles(mapping);
+                });
+
+                return () => { 
+                    unsubscribe(); 
+                    unsubPosts(); 
+                    unsubProfiles(); 
+                };
+            }, []);
+
+            const loadLocalData = () => {
+                const local = localStorage.getItem('ig_posts_local');
+                if (local) {
+                    setPosts(JSON.parse(local));
+                } else {
+                    setPosts([
+                        { 
+                            id: 'mock_1', 
+                            imageUrl: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80', 
+                            caption: 'ยินดีต้อนรับสู่ TammadaDay Gallery! 💖 แตะหัวใจเพื่อส่งความรู้สึกร่วมได้เลยครับ #TammadaDay #แกลเลอรีความทรงจำ', 
+                            location: 'บางแสน ชลบุรี', 
+                            lat: '13.2905', 
+                            lon: '100.9080', 
+                            likesList: [], 
+                            comments: [], 
+                            dateString: new Date().toLocaleDateString('th-TH'), 
+                            timestamp: Date.now() - 100000 
+                        }
+                    ]);
+                }
+                const savedProfile = localStorage.getItem('ig_profile_local');
+                if (savedProfile) {
+                    setProfile(JSON.parse(savedProfile));
+                }
+            };
+
+            const triggerGoogleSignIn = async () => {
+                if (!auth) return;
+                try {
+                    await signInWithPopup(auth, googleProvider);
+                    showNotification("🚀 เข้าสู่ระบบคลาวด์ Google สำเร็จ!");
+                } catch (e) {
+                    console.error("Sign in failed:", e);
+                    showNotification("❌ เชื่อมต่อ Google ล้มเหลว");
+                }
+            };
+
+            const triggerSignOut = async () => {
+                if (!auth) return;
+                try {
+                    await signOut(auth);
+                    showNotification("👋 ออกจากระบบเรียบร้อย");
+                    loadLocalData();
+                } catch (e) {}
+            };
+
+            // Image manipulation and filters
+            const applyFilterToImage = (filterName) => {
+                setSelectedFilter(filterName);
+                if (!originalImage) return;
                 
-                <div class="modal-footer">
-                    <button type="button" class="btn-secondary" id="btn-cancel-task-modal">ยกเลิก</button>
-                    <button type="submit" class="btn-primary" id="btn-save-task">
-                        <i data-lucide="check"></i>
-                        <span>บันทึกงาน</span>
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
+                const img = new Image();
+                img.src = originalImage;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width; 
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.filter = filters[filterName]?.filterStr || 'none';
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    setImagePreview(canvas.toDataURL('image/jpeg', 0.8));
+                };
+            };
 
-    <!-- ====================================================
-         MODAL 2: DETAIL VIEW MODAL
-         ==================================================== -->
-    <div class="modal-overlay" id="detail-modal-overlay">
-        <div class="modal-container" style="max-width: 650px;">
-            <div class="modal-header">
-                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                    <div style="display: flex; align-items: center; gap: 0.75rem;">
-                        <span class="category-tag" id="detail-category-tag">หมวดหมู่</span>
-                        <span class="status-badge" id="detail-status-badge">สถานะ</span>
-                    </div>
-                </div>
-                <button class="icon-btn" id="btn-close-detail-modal"><i data-lucide="x"></i></button>
-            </div>
-            
-            <div class="modal-body">
-                <!-- Task title with beautiful focus -->
-                <h2 id="detail-task-title" style="font-size: 1.6rem; font-weight: 700; margin-bottom: 1.5rem; color: var(--text-primary);">ชื่องานสำหรับแสดงรายละเอียด</h2>
+            // HTML5 Canvas generation with applied text & stickers
+            const handleSaveDecorations = () => {
+                if (!originalImage) return;
                 
-                <!-- Due Date & Timestamps Details -->
-                <div class="detail-meta-grid">
-                    <div class="detail-meta-item">
-                        <span class="detail-meta-lbl">กำหนดส่ง (Due Date)</span>
-                        <span class="detail-meta-val" id="detail-due-value" style="color: var(--text-primary);">วันเวลาที่กำหนด</span>
+                const img = new Image();
+                img.src = originalImage;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width; 
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    
+                    // 1. Draw image with filter
+                    ctx.filter = filters[selectedFilter]?.filterStr || 'none';
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    
+                    // 2. Clear filter for overlays
+                    ctx.filter = 'none';
+                    
+                    // 3. Draw text layer
+                    ctx.font = `bold ${Math.round(editorTextSize * (canvas.width / 400))}px "Prompt", sans-serif`;
+                    ctx.fillStyle = editorTextColor;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+                    ctx.shadowBlur = 8;
+                    ctx.shadowOffsetX = 2;
+                    ctx.shadowOffsetY = 2;
+                    ctx.fillText(editorText, (editorTextX / 100) * canvas.width, (editorTextY / 100) * canvas.height);
+                    
+                    // 4. Draw sticker layer
+                    ctx.font = `${Math.round(editorStickerSize * (canvas.width / 400))}px "Segoe UI Emoji", sans-serif`;
+                    ctx.shadowBlur = 4;
+                    ctx.fillText(editorSticker, (editorStickerX / 100) * canvas.width, (editorStickerY / 100) * canvas.height);
+                    
+                    const finalDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                    setImagePreview(finalDataUrl);
+                    showNotification("🎨 บันทึกรายละเอียดการแต่งภาพสำเร็จ!");
+                    playSynthSound('like');
+                };
+            };
+
+            const handleFileChange = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    setOriginalImage(event.target.result);
+                    setImagePreview(event.target.result);
+                    setSelectedFilter('none');
+                };
+                reader.readAsDataURL(file);
+            };
+
+            // Draggable Element controls on live preview container
+            const handleElementDragStart = (e, target, action) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                setSelectedElement(target);
+                
+                const container = editorContainerRef.current;
+                if (!container) return;
+                const rect = container.getBoundingClientRect();
+                
+                const isTouch = e.type.startsWith('touch');
+                const startClientX = isTouch ? e.touches[0].clientX : e.clientX;
+                const startClientY = isTouch ? e.touches[0].clientY : e.clientY;
+                
+                const startXVal = target === 'text' ? editorTextX : editorStickerX;
+                const startYVal = target === 'text' ? editorTextY : editorStickerY;
+                const startSizeVal = target === 'text' ? editorTextSize : editorStickerSize;
+                
+                const handleMove = (moveEvent) => {
+                    const moveClientX = moveEvent.type.startsWith('touch') ? moveEvent.touches[0].clientX : moveEvent.clientX;
+                    const moveClientY = moveEvent.type.startsWith('touch') ? moveEvent.touches[0].clientY : moveEvent.clientY;
+                    
+                    const deltaX = moveClientX - startClientX;
+                    const deltaY = moveClientY - startClientY;
+                    
+                    if (action === 'move') {
+                        const pctDeltaX = (deltaX / rect.width) * 100;
+                        const pctDeltaY = (deltaY / rect.height) * 100;
+                        
+                        const newX = Math.max(5, Math.min(95, startXVal + pctDeltaX));
+                        const newY = Math.max(5, Math.min(95, startYVal + pctDeltaY));
+                        
+                        if (target === 'text') {
+                            setEditorTextX(Math.round(newX));
+                            setEditorTextY(Math.round(newY));
+                        } else {
+                            setEditorStickerX(Math.round(newX));
+                            setEditorStickerY(Math.round(newY));
+                        }
+                    } else if (action === 'resize') {
+                        const scaleFactor = 0.5;
+                        const deltaSize = (deltaX + deltaY) * scaleFactor;
+                        const newSize = Math.max(12, Math.min(100, startSizeVal + deltaSize));
+                        
+                        if (target === 'text') {
+                            setEditorTextSize(Math.round(newSize));
+                        } else {
+                            setEditorStickerSize(Math.round(newSize));
+                        }
+                    }
+                };
+                
+                const handleEnd = () => {
+                    window.removeEventListener('mousemove', handleMove);
+                    window.removeEventListener('mouseup', handleEnd);
+                    window.removeEventListener('touchmove', handleMove);
+                    window.removeEventListener('touchend', handleEnd);
+                };
+                
+                window.addEventListener('mousemove', handleMove);
+                window.addEventListener('mouseup', handleEnd);
+                window.addEventListener('touchmove', handleMove, { passive: false });
+                window.addEventListener('touchend', handleEnd);
+            };
+
+            // Post Submit Action
+            const handleSubmitPost = async () => {
+                if (!imagePreview) {
+                    showNotification("⚠️ กรุณาเลือกรูปภาพความทรงจำ");
+                    return;
+                }
+
+                const postObject = {
+                    id: Date.now().toString(),
+                    authorId: user ? user.uid : 'offline_user',
+                    imageUrl: imagePreview,
+                    caption: caption,
+                    location: location,
+                    lat: lat,
+                    lon: lon,
+                    likesList: [],
+                    comments: [],
+                    dateString: new Date().toLocaleDateString('th-TH'),
+                    timestamp: Date.now()
+                };
+
+                if (user && db) {
+                    try {
+                        await setDoc(doc(db, 'posts', postObject.id), postObject);
+                        showNotification("🚀 อัปโหลดความทรงจำขึ้นระบบคลาวด์สำเร็จ!");
+                    } catch (e) {
+                        console.error(e);
+                        showNotification("❌ คลาวด์ปฏิเสธการเซฟ บันทึกเก็บไว้ในเครื่องแทน");
+                        saveLocalPost(postObject);
+                    }
+                } else {
+                    saveLocalPost(postObject);
+                }
+
+                // Reset Fields
+                setCaption('');
+                setLocation('');
+                setLat('');
+                setLon('');
+                setImagePreview(null);
+                setOriginalImage(null);
+                playSynthSound('post');
+                setActiveTab('feed');
+            };
+
+            const saveLocalPost = (newPost) => {
+                const list = [newPost, ...posts];
+                setPosts(list);
+                localStorage.setItem('ig_posts_local', JSON.stringify(list));
+                showNotification("💾 บันทึกความทรงจำเก็บในคอมพิวเตอร์ของคุณสำเร็จ!");
+            };
+
+            // Like Action logic
+            const handleLikePost = async (postId, likeValue) => {
+                const targetUid = user ? user.uid : 'offline_user';
+                playSynthSound('like');
+
+                if (user && db) {
+                    try {
+                        const postRef = doc(db, 'posts', postId);
+                        await updateDoc(postRef, {
+                            likesList: likeValue ? arrayUnion(targetUid) : arrayRemove(targetUid)
+                        });
+                    } catch (e) {
+                        console.error("Firestore like failed, fall back locally:", e);
+                        updateLocalLike(postId, targetUid, likeValue);
+                    }
+                } else {
+                    updateLocalLike(postId, targetUid, likeValue);
+                }
+            };
+
+            const updateLocalLike = (postId, uid, isAdd) => {
+                const updated = posts.map(p => {
+                    if (p.id === postId) {
+                        const list = p.likesList || [];
+                        const newList = isAdd 
+                            ? [...new Set([...list, uid])] 
+                            : list.filter(item => item !== uid);
+                        return { ...p, likesList: newList };
+                    }
+                    return p;
+                });
+                setPosts(updated);
+                localStorage.setItem('ig_posts_local', JSON.stringify(updated));
+            };
+
+            // Deletion logic
+            const handleDeletePost = async (postId) => {
+                if (!confirm("คุณแน่ใจว่าต้องการลบบันทึกความทรงจำนี้?")) return;
+                playSynthSound('delete');
+
+                if (user && db) {
+                    try {
+                        await deleteDoc(doc(db, 'posts', postId));
+                        showNotification("🗑️ ลบโพสต์ออกจากเซิร์ฟเวอร์คลาวด์เรียบร้อย");
+                    } catch (e) {
+                        console.error(e);
+                        deleteLocalPost(postId);
+                    }
+                } else {
+                    deleteLocalPost(postId);
+                }
+            };
+
+            const deleteLocalPost = (postId) => {
+                const updated = posts.filter(p => p.id !== postId);
+                setPosts(updated);
+                localStorage.setItem('ig_posts_local', JSON.stringify(updated));
+                showNotification("🗑️ ลบโพสต์สำเร็จ");
+            };
+
+            // Interactive Comment system
+            const handleAddComment = async (e) => {
+                e.preventDefault();
+                if (!newCommentText.trim()) return;
+
+                const newCommentObj = {
+                    id: Date.now().toString(),
+                    authorId: user ? user.uid : 'offline_user',
+                    authorName: profile.name || 'Anonymous',
+                    text: newCommentText,
+                    timestamp: Date.now()
+                };
+
+                if (user && db) {
+                    try {
+                        const postRef = doc(db, 'posts', activeCommentPostId);
+                        await updateDoc(postRef, {
+                            comments: arrayUnion(newCommentObj)
+                        });
+                        setNewCommentText('');
+                    } catch (err) {
+                        saveLocalComment(newCommentObj);
+                    }
+                } else {
+                    saveLocalComment(newCommentObj);
+                }
+            };
+
+            const saveLocalComment = (comment) => {
+                const updated = posts.map(p => {
+                    if (p.id === activeCommentPostId) {
+                        return { ...p, comments: [...(p.comments || []), comment] };
+                    }
+                    return p;
+                });
+                setPosts(updated);
+                localStorage.setItem('ig_posts_local', JSON.stringify(updated));
+                setNewCommentText('');
+            };
+
+            // Profile Edit logic
+            const handleSaveProfile = async (e) => {
+                e.preventDefault();
+                localStorage.setItem('ig_profile_local', JSON.stringify(profile));
+
+                if (user && db) {
+                    try {
+                        await setDoc(doc(db, 'profiles', user.uid), profile);
+                        showNotification("👤 อัปเดตประวัติหน้าหลักเรียบร้อย!");
+                    } catch (e) {
+                        showNotification("💾 เซฟการเปลี่ยนแปลงเก็บในเครื่องแล้ว");
+                    }
+                } else {
+                    showNotification("💾 เซฟประวัติส่วนตัวเก็บในเครื่องแล้ว");
+                }
+                setActiveTab('feed');
+            };
+
+            // Get reverse location details using nominatim OSM geocoder
+            const fetchGeocodedLocation = () => {
+                if (!navigator.geolocation) {
+                    showNotification("บราวเซอร์ของคุณไม่รองรับพิกัดตำแหน่ง");
+                    return;
+                }
+                showNotification("📡 กำลังพิกัดหาตำแหน่งของคุณ...");
+                navigator.geolocation.getCurrentPosition(async (pos) => {
+                    const { latitude, longitude } = pos.coords;
+                    setLat(latitude.toFixed(6));
+                    setLon(longitude.toFixed(6));
+                    
+                    try {
+                        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=th`);
+                        const data = await response.json();
+                        if (data && data.address) {
+                            const addr = data.address;
+                            const place = data.name || addr.suburb || addr.town || addr.village || addr.city;
+                            setLocation(place || "พิกัดที่พบ");
+                            showNotification("📍 ปักหมุดระบุพิกัดสำเร็จ!");
+                        }
+                    } catch (e) {
+                        setLocation("พิกัดแผนที่");
+                    }
+                }, () => {
+                    showNotification("❌ ไม่สามารถดึงพิกัดตำแหน่งได้");
+                });
+            };
+
+            // Filtered posts based on active hashtag
+            const filteredPosts = useMemo(() => {
+                if (!searchTag) return posts;
+                return posts.filter(p => p.caption && p.caption.includes(searchTag));
+            }, [posts, searchTag]);
+
+            return (
+                <div class="h-full flex flex-col relative w-full overflow-hidden">
+                    {/* Floating Emojis Reaction layer */}
+                    <div class="absolute inset-0 pointer-events-none z-50 overflow-hidden">
+                        {floatingEmojis.map(item => (
+                            <div 
+                                key={item.id} 
+                                class="animate-float-up" 
+                                style={{ '--drift': item.drift, left: item.x }}
+                            >
+                                {item.emoji}
+                            </div>
+                        ))}
                     </div>
-                    <div class="detail-meta-item">
-                        <span class="detail-meta-lbl">เวลาที่เหลืออยู่ / สถานะความเร่งด่วน</span>
-                        <span class="detail-meta-val" id="detail-countdown-value" style="font-weight: 700;">คำนวณ...</span>
+
+                    {/* App Bar / Header */}
+                    <header class="h-14 border-b border-gray-100 dark:border-slate-800/80 px-4 flex items-center justify-between shrink-0 bg-white/70 dark:bg-slate-900/70 z-10">
+                        <div class="flex items-center gap-1.5 cursor-pointer" onClick={() => { setSearchTag(''); setActiveTab('feed'); }}>
+                            <span class="text-lg">📸</span>
+                            <h1 class="text-lg font-bold bg-gradient-to-r from-pink-500 via-red-500 to-purple-600 bg-clip-text text-transparent tracking-tight">
+                                TammadaDay Gallery
+                            </h1>
+                        </div>
+                        
+                        <div class="flex items-center gap-2">
+                            <button 
+                                onClick={() => { setTheme(theme === 'dark' ? 'sakura' : theme === 'sakura' ? 'ocean' : theme === 'ocean' ? 'matcha' : 'dark'); }} 
+                                class="w-8 h-8 rounded-full flex items-center justify-center bg-gray-100 dark:bg-slate-800 text-sm active:scale-90 transition-transform"
+                                title="สลับธีมสี"
+                            >
+                                🎨
+                            </button>
+                            {user ? (
+                                <div class="w-7 h-7 rounded-full overflow-hidden border border-pink-500 shrink-0">
+                                    {profile.avatarUrl ? <img src={profile.avatarUrl} alt="User photo" class="w-full h-full object-cover" /> : <div class="bg-gray-200 w-full h-full flex items-center justify-center text-xs">👤</div>}
+                                </div>
+                            ) : (
+                                <button onClick={triggerGoogleSignIn} class="text-[11px] font-bold bg-pink-500 hover:bg-pink-600 text-white px-2.5 py-1.5 rounded-full transition-colors">
+                                    เข้าสู่ระบบ
+                                </button>
+                            )}
+                        </div>
+                    </header>
+
+                    {/* Active Hash Filter Badge */}
+                    {searchTag && (
+                        <div class="px-4 py-2 bg-pink-50 dark:bg-pink-950/20 text-pink-600 dark:text-pink-400 text-xs font-semibold flex justify-between items-center shrink-0">
+                            <span>🔍 แสดงโพสต์เฉพาะแฮชแท็ก: {searchTag}</span>
+                            <button onClick={() => setSearchTag('')} class="underline font-bold text-[10px] uppercase">ล้างตัวกรอง</button>
+                        </div>
+                    )}
+
+                    {/* Main Scrolling Viewport */}
+                    <div class="flex-1 overflow-y-auto no-scrollbar pb-16 bg-gray-50/50 dark:bg-slate-900/20">
+                        {authLoading ? (
+                            <div class="flex flex-col items-center justify-center h-48">
+                                <div class="w-8 h-8 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-2"></div>
+                                <span class="text-xs text-gray-500">กำลังเชื่อมต่อ TammadaDay Cloud...</span>
+                            </div>
+                        ) : activeTab === 'feed' ? (
+                            <div class="p-3 max-w-md mx-auto">
+                                {filteredPosts.length === 0 ? (
+                                    <div class="text-center py-10 text-gray-400">
+                                        <div class="text-3xl mb-2">📥</div>
+                                        <p class="text-xs">ยังไม่มีบันทึกรูปภาพความทรงจำที่ตรงตามเงื่อนไข</p>
+                                    </div>
+                                ) : (
+                                    filteredPosts.map(p => (
+                                        <PostItem 
+                                            key={p.id} 
+                                            post={p} 
+                                            currentUser={user} 
+                                            profiles={profiles}
+                                            onDeleteClick={handleDeletePost} 
+                                            onLike={handleLikePost} 
+                                            onCommentClick={(id) => { setActiveCommentPostId(id); }}
+                                            triggerReaction={triggerFloatingReaction}
+                                            onHashtagClick={(tag) => setSearchTag(tag)}
+                                        />
+                                    ))
+                                )}
+                            </div>
+                        ) : activeTab === 'map' ? (
+                            <MemoryMap 
+                                posts={posts} 
+                                handleGridItemClick={(postId) => {
+                                    setActiveTab('feed');
+                                    setTimeout(() => {
+                                        const el = document.getElementById("post-" + postId);
+                                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    }, 400);
+                                }}
+                            />
+                        ) : activeTab === 'add' ? (
+                            <div class="p-4 max-w-md mx-auto space-y-4">
+                                <h2 class="text-sm font-bold text-gray-500 dark:text-gray-400">🆕 โพสต์บันทึกความทรงจำใหม่</h2>
+                                
+                                {/* Photo Selector / Editor view */}
+                                <div class="space-y-2">
+                                    <div 
+                                        onClick={() => fileInputRef.current?.click()} 
+                                        class="aspect-square w-full rounded-3xl border-2 border-dashed border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-col items-center justify-center overflow-hidden cursor-pointer relative shadow-sm"
+                                    >
+                                        {imagePreview ? (
+                                            <div ref={editorContainerRef} class="relative w-full h-full select-none">
+                                                <img src={imagePreview} alt="Preview" class="w-full h-full object-cover" />
+                                                
+                                                {/* Text Overlay element (Interactive) */}
+                                                <div 
+                                                    onMouseDown={(e) => handleElementDragStart(e, 'text', 'move')}
+                                                    onTouchStart={(e) => handleElementDragStart(e, 'text', 'move')}
+                                                    style={{ left: editorTextX + '%', top: editorTextY + '%', fontSize: editorTextSize + 'px', color: editorTextColor }}
+                                                    class={`absolute -translate-x-1/2 -translate-y-1/2 cursor-move font-bold px-2 py-0.5 rounded border ${selectedElement === 'text' ? 'border-pink-500 bg-black/40' : 'border-transparent'} drop-shadow-md whitespace-nowrap`}
+                                                >
+                                                    {editorText}
+                                                    {selectedElement === 'text' && (
+                                                        <div 
+                                                            onMouseDown={(e) => handleElementDragStart(e, 'text', 'resize')}
+                                                            onTouchStart={(e) => handleElementDragStart(e, 'text', 'resize')}
+                                                            class="absolute -right-2 -bottom-2 w-4 h-4 bg-pink-500 rounded-full cursor-se-resize flex items-center justify-center text-[8px] text-white"
+                                                        >
+                                                            📐
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Sticker Overlay element (Interactive) */}
+                                                <div 
+                                                    onMouseDown={(e) => handleElementDragStart(e, 'sticker', 'move')}
+                                                    onTouchStart={(e) => handleElementDragStart(e, 'sticker', 'move')}
+                                                    style={{ left: editorStickerX + '%', top: editorStickerY + '%', fontSize: editorStickerSize + 'px' }}
+                                                    class={`absolute -translate-x-1/2 -translate-y-1/2 cursor-move px-2 py-0.5 rounded border ${selectedElement === 'sticker' ? 'border-purple-500 bg-black/30' : 'border-transparent'} drop-shadow-md`}
+                                                >
+                                                    {editorSticker}
+                                                    {selectedElement === 'sticker' && (
+                                                        <div 
+                                                            onMouseDown={(e) => handleElementDragStart(e, 'sticker', 'resize')}
+                                                            onTouchStart={(e) => handleElementDragStart(e, 'sticker', 'resize')}
+                                                            class="absolute -right-2 -bottom-2 w-4 h-4 bg-purple-500 rounded-full cursor-se-resize flex items-center justify-center text-[8px] text-white"
+                                                        >
+                                                            📐
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div class="text-center p-4">
+                                                <div class="text-4xl mb-2">📸</div>
+                                                <span class="text-xs font-semibold text-gray-500">แตะตรงนี้เพื่อเลือกรูปสวยๆ</span>
+                                            </div>
+                                        )}
+                                        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} class="hidden" />
+                                    </div>
+                                    <span class="text-[10px] text-gray-400 block text-center">💡 ย้าย/ขยายขนาดตัวอักษรและสติกเกอร์ได้โดยการ แตะ/คลิกและลาก บนตัววัตถุโดยตรง</span>
+                                </div>
+
+                                {imagePreview && (
+                                    <div class="space-y-3 bg-white dark:bg-slate-800 p-4 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm animate-fade-in">
+                                        {/* Filter presets bar */}
+                                        <div>
+                                            <label class="text-xs font-bold text-gray-400 block mb-1.5">🎨 เลือกเอฟเฟกต์ฟิลเตอร์สี</label>
+                                            <div class="flex gap-2 overflow-x-auto no-scrollbar py-1">
+                                                {Object.keys(filters).map(fKey => (
+                                                    <button 
+                                                        key={fKey}
+                                                        onClick={() => applyFilterToImage(fKey)}
+                                                        class={`px-3 py-1 rounded-full text-xs font-medium border shrink-0 transition-colors ${selectedFilter === fKey ? 'bg-pink-500 text-white border-pink-500' : 'bg-gray-50 dark:bg-slate-900 border-gray-100 dark:border-slate-700 text-gray-600 dark:text-gray-300'}`}
+                                                    >
+                                                        {filters[fKey].name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Overlay customization forms */}
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <div class="space-y-1">
+                                                <label class="text-[11px] font-bold text-gray-400 block">✍️ คำข้อความบนภาพ</label>
+                                                <input type="text" value={editorText} onChange={e => setEditorText(e.target.value)} class="w-full px-2.5 py-1.5 rounded-xl border border-gray-100 dark:border-slate-700 bg-gray-55 dark:bg-slate-900 text-xs" />
+                                            </div>
+                                            <div class="space-y-1">
+                                                <label class="text-[11px] font-bold text-gray-400 block">⭐ สติกเกอร์ความรู้สึก</label>
+                                                <select value={editorSticker} onChange={e => setEditorSticker(e.target.value)} class="w-full px-2.5 py-1.5 rounded-xl border border-gray-100 dark:border-slate-700 bg-gray-55 dark:bg-slate-900 text-xs">
+                                                    {['✨', '🔥', '🌸', '🧸', '☕', '🍰', '📍', '🌴', '🕶️', '🚀', '🤍'].map(emoji => (
+                                                        <option key={emoji} value={emoji}>{emoji} สติกเกอร์ {emoji}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <button 
+                                            onClick={handleSaveDecorations} 
+                                            class="w-full py-2 rounded-2xl bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
+                                        >
+                                            <span>💾 รวมรายละเอียดการแต่งภาพ</span>
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Meta form description */}
+                                <div class="space-y-3.5">
+                                    <div class="space-y-1">
+                                        <label class="text-xs font-bold text-gray-400 block">💬 คำบรรยายภาพความรู้สึก (Caption)</label>
+                                        <textarea 
+                                            value={caption} 
+                                            onChange={e => setCaption(e.target.value)} 
+                                            rows="2.5" 
+                                            placeholder="พิมพ์บอกเล่าความรู้สึก หรือระบุแฮชแท็ก #คาเฟ่..." 
+                                            class="w-full px-3 py-2 rounded-2xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-pink-500 focus:outline-none"
+                                        />
+                                    </div>
+
+                                    <div class="space-y-2.5">
+                                        <div class="flex items-center justify-between">
+                                            <label class="text-xs font-bold text-gray-400">📍 ข้อมูลระบุพิกัดสถานที่</label>
+                                            <button 
+                                                onClick={fetchGeocodedLocation} 
+                                                class="text-[10px] font-bold text-pink-500 hover:underline flex items-center gap-0.5"
+                                            >
+                                                <span>📡 ดึงพิกัดตาม GPS</span>
+                                            </button>
+                                        </div>
+                                        <input 
+                                            type="text" 
+                                            value={location} 
+                                            onChange={e => setLocation(e.target.value)} 
+                                            placeholder="เช่น หาดบางแสน, Cafe ในสวน..." 
+                                            class="w-full px-3 py-2 rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:outline-none"
+                                        />
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <input type="number" step="any" value={lat} onChange={e => setLat(e.target.value)} placeholder="ละติจูด (Latitude)" class="px-3 py-1.5 rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] focus:outline-none" />
+                                            <input type="number" step="any" value={lon} onChange={e => setLon(e.target.value)} placeholder="ลองจิจูด (Longitude)" class="px-3 py-1.5 rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] focus:outline-none" />
+                                        </div>
+                                    </div>
+
+                                    <button 
+                                        onClick={handleSubmitPost} 
+                                        class={`w-full py-3 rounded-2xl ${currentTheme.buttonBg} text-white font-bold text-sm shadow-md active:scale-98 transition-all flex items-center justify-center gap-1.5`}
+                                    >
+                                        <span>🚀 ปล่อยโพสต์ความทรงจำ</span>
+                                    </button>
+                                </div>
+                            </div>
+                        ) : activeTab === 'profile' ? (
+                            <form onSubmit={handleSaveProfile} class="p-4 max-w-md mx-auto space-y-4">
+                                <h2 class="text-sm font-bold text-gray-500 dark:text-gray-400">👤 ข้อมูลหน้าหลักประวัติส่วนตัว</h2>
+                                
+                                <div class="bg-white dark:bg-slate-800 p-4 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm space-y-3">
+                                    <div class="space-y-1">
+                                        <label class="text-xs font-bold text-gray-400">ชื่อนามแฝง (DisplayName)</label>
+                                        <input 
+                                            type="text" 
+                                            value={profile.name} 
+                                            onChange={e => setProfile({ ...profile, name: e.target.value })} 
+                                            class="w-full px-3 py-2 rounded-xl border border-gray-100 dark:border-slate-700 bg-gray-55 dark:bg-slate-900 text-xs" 
+                                        />
+                                    </div>
+
+                                    <div class="space-y-1">
+                                        <label class="text-xs font-bold text-gray-400">ประวัติสั้นๆ (Bio)</label>
+                                        <input 
+                                            type="text" 
+                                            value={profile.bio} 
+                                            onChange={e => setProfile({ ...profile, bio: e.target.value })} 
+                                            class="w-full px-3 py-2 rounded-xl border border-gray-100 dark:border-slate-700 bg-gray-55 dark:bg-slate-900 text-xs" 
+                                        />
+                                    </div>
+
+                                    <div class="space-y-1">
+                                        <label class="text-xs font-bold text-gray-400">ลิงก์รูปโปรไฟล์ (Avatar URL)</label>
+                                        <input 
+                                            type="text" 
+                                            value={profile.avatarUrl} 
+                                            onChange={e => setProfile({ ...profile, avatarUrl: e.target.value })} 
+                                            placeholder="https://images..." 
+                                            class="w-full px-3 py-2 rounded-xl border border-gray-100 dark:border-slate-700 bg-gray-55 dark:bg-slate-900 text-xs" 
+                                        />
+                                    </div>
+                                </div>
+
+                                <button 
+                                    type="submit" 
+                                    class={`w-full py-2.5 rounded-2xl ${currentTheme.buttonBg} text-white font-bold text-xs shadow-md transition-colors`}
+                                >
+                                    💾 บันทึกประวัติ
+                                </button>
+                            </form>
+                        ) : activeTab === 'settings' ? (
+                            <div class="p-4 max-w-md mx-auto space-y-4">
+                                <h2 class="text-sm font-bold text-gray-500 dark:text-gray-400">⚙️ ตั้งค่าความปลอดภัยคลาวด์ Firebase</h2>
+                                
+                                <div class="bg-white dark:bg-slate-800 p-4 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm space-y-3.5">
+                                    <p class="text-[11px] text-gray-400 leading-relaxed">
+                                        ปรับเปลี่ยนหรือวางชุดโครงสร้าง Firebase Config ของคุณเพื่อเชื่อมข้อมูลออนไลน์ร่วมกับสมาชิกทีมคนอื่นๆ ได้อย่างอิสระ
+                                    </p>
+                                    
+                                    <div class="space-y-1">
+                                        <label class="text-xs font-bold text-gray-400 block">วางโค้ด Firebase Config (JSON)</label>
+                                        <textarea 
+                                            id="firebase-config-input" 
+                                            rows="5" 
+                                            placeholder={JSON.stringify(defaultFirebaseConfig, null, 2)}
+                                            class="w-full px-3 py-2 rounded-2xl border border-gray-100 dark:border-slate-700 bg-gray-55 dark:bg-slate-900 text-[10px] font-mono"
+                                        />
+                                    </div>
+
+                                    <button 
+                                        onClick={() => {
+                                            const val = document.getElementById('firebase-config-input').value;
+                                            if (!val.trim()) {
+                                                localStorage.removeItem('custom_firebase_config_dailygallery');
+                                                showNotification("🔄 คืนค่า Firebase Config ดั้งเดิม!");
+                                                setTimeout(() => window.location.reload(), 1000);
+                                                return;
+                                            }
+                                            try {
+                                                JSON.parse(val);
+                                                localStorage.setItem('custom_firebase_config_dailygallery', val.trim());
+                                                showNotification("💾 บันทึกการตั้งค่า Firebase สำเร็จ!");
+                                                setTimeout(() => window.location.reload(), 1000);
+                                            } catch (err) {
+                                                showNotification("❌ รหัส JSON ไม่ถูกต้อง");
+                                            }
+                                        }} 
+                                        class={`w-full py-2 rounded-2xl ${currentTheme.buttonBg} text-white font-bold text-xs transition-colors`}
+                                    >
+                                        💾 เซฟการตั้งค่าคลาวด์และรีเฟรช
+                                    </button>
+                                </div>
+
+                                {user && (
+                                    <button 
+                                        onClick={triggerSignOut} 
+                                        class="w-full py-2.5 rounded-2xl border border-red-200 dark:border-red-950 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 text-xs font-bold transition-colors"
+                                    >
+                                        👋 ออกจากระบบบัญชี Google
+                                    </button>
+                                )}
+                            </div>
+                        ) : null}
                     </div>
-                    <div class="detail-meta-item">
-                        <span class="detail-meta-lbl">สร้างเมื่อ</span>
-                        <span class="detail-meta-val" id="detail-created-value" style="font-weight: normal; color: var(--text-secondary);">วันที่ลงระบบ</span>
-                    </div>
-                    <div class="detail-meta-item">
-                        <span class="detail-meta-lbl">แก้ไขล่าสุดเมื่อ</span>
-                        <span class="detail-meta-val" id="detail-updated-value" style="font-weight: normal; color: var(--text-secondary);">-</span>
-                    </div>
+
+                    {/* Interactive Comment Modal Drawer */}
+                    {activeCommentPostId && (
+                        <div class="absolute inset-0 bg-black/60 z-40 flex flex-col justify-end transition-opacity duration-300 animate-fade-in">
+                            <div class="absolute inset-0" onClick={() => setActiveCommentPostId(null)}></div>
+                            <div class="w-full max-h-[75%] rounded-t-[2.5rem] bg-white dark:bg-slate-800 z-50 p-5 flex flex-col border-t border-gray-100 dark:border-slate-700 shadow-2xl">
+                                <div class="w-12 h-1 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-4 cursor-pointer" onClick={() => setActiveCommentPostId(null)}></div>
+                                
+                                <div class="flex justify-between items-center mb-3">
+                                    <h3 class="font-bold text-sm text-gray-900 dark:text-white">💬 ความคิดเห็นและถกประเด็นความทรงจำ</h3>
+                                    <button onClick={() => setActiveCommentPostId(null)} class="text-xs text-gray-400 font-bold hover:underline">ปิด</button>
+                                </div>
+
+                                {/* Comments list */}
+                                <div class="flex-1 overflow-y-auto space-y-3 py-2 no-scrollbar">
+                                    {((posts.find(p => p.id === activeCommentPostId)?.comments) || []).length === 0 ? (
+                                        <div class="text-center py-6 text-xs text-gray-400">ยังไม่มีผู้ใดแสดงความคิดเห็น... เริ่มพิมพ์เพื่อประเดิมคอมเมนต์แรกได้เลย!</div>
+                                    ) : (
+                                        ((posts.find(p => p.id === activeCommentPostId)?.comments) || []).map(c => (
+                                            <div key={c.id} class="text-xs bg-gray-50 dark:bg-slate-900/60 p-2.5 rounded-2xl border border-gray-100 dark:border-slate-800/80">
+                                                <div class="flex justify-between items-center mb-1">
+                                                    <span class="font-bold text-pink-600 dark:text-pink-400">{c.authorName || 'Guest'}</span>
+                                                    <span class="text-[9px] text-gray-400">{(new Date(c.timestamp || Date.now())).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.</span>
+                                                </div>
+                                                <p class="text-gray-800 dark:text-slate-200 whitespace-pre-wrap">{c.text}</p>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+
+                                {/* Write comment form */}
+                                <form onSubmit={handleAddComment} class="mt-3 flex gap-2 shrink-0">
+                                    <input 
+                                        type="text" 
+                                        value={newCommentText} 
+                                        onChange={e => setNewCommentText(e.target.value)} 
+                                        placeholder="พิมพ์ความคิดเห็นของคุณที่นี่..." 
+                                        class="flex-grow px-3 py-2 rounded-xl border border-gray-100 dark:border-slate-700 bg-gray-55 dark:bg-slate-900 text-xs focus:outline-none"
+                                    />
+                                    <button 
+                                        type="submit" 
+                                        class={`px-4 rounded-xl ${currentTheme.buttonBg} text-white font-bold text-xs transition-colors shrink-0`}
+                                    >
+                                        ส่ง
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Notification Alert banner */}
+                    {notification && (
+                        <div class="absolute top-16 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/85 text-white font-bold text-[11px] rounded-full drop-shadow-lg z-50 animate-bounce duration-1000 whitespace-nowrap">
+                            {notification}
+                        </div>
+                    )}
+
+                    {/* Mobile App Shell bottom navigation menu */}
+                    <nav class="h-16 border-t border-gray-100 dark:border-slate-800/80 shrink-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur flex justify-around items-center z-10">
+                        <button onClick={() => { setSearchTag(''); setActiveTab('feed'); }} class={`flex flex-col items-center gap-0.5 ${activeTab === 'feed' ? currentTheme.textAccent : 'text-gray-400 dark:text-gray-500'}`}>
+                            <span class="text-lg">🏡</span>
+                            <span class="text-[9px] font-semibold">ฟีดข่าว</span>
+                        </button>
+                        <button onClick={() => setActiveTab('map')} class={`flex flex-col items-center gap-0.5 ${activeTab === 'map' ? currentTheme.textAccent : 'text-gray-400 dark:text-gray-500'}`}>
+                            <span class="text-lg">📍</span>
+                            <span class="text-[9px] font-semibold">ปักหมุด</span>
+                        </button>
+                        
+                        <button onClick={() => setActiveTab('add')} class={`w-10 h-10 rounded-full bg-gradient-to-tr from-pink-500 via-red-500 to-purple-600 text-white flex items-center justify-center shadow-lg transform active:scale-90 transition-transform ${activeTab === 'add' ? 'ring-2 ring-pink-500 ring-offset-2 dark:ring-offset-slate-900' : ''}`} title="สร้างบันทึกใหม่">
+                            <PlusIcon />
+                        </button>
+
+                        <button onClick={() => setActiveTab('profile')} class={`flex flex-col items-center gap-0.5 ${activeTab === 'profile' ? currentTheme.textAccent : 'text-gray-400 dark:text-gray-500'}`}>
+                            <span class="text-lg">👤</span>
+                            <span class="text-[9px] font-semibold">โปรไฟล์</span>
+                        </button>
+                        <button onClick={() => setActiveTab('settings')} class={`flex flex-col items-center gap-0.5 ${activeTab === 'settings' ? currentTheme.textAccent : 'text-gray-400 dark:text-gray-500'}`}>
+                            <span class="text-lg">⚙️</span>
+                            <span class="text-[9px] font-semibold">ตั้งค่า</span>
+                        </button>
+                    </nav>
                 </div>
+            );
+        }
 
-                <!-- Detailed Description -->
-                <div class="detail-desc-box">
-                    <div class="detail-desc-title">รายละเอียดข้อมูลงาน</div>
-                    <div class="detail-desc-content" id="detail-desc-value">ไม่มีคำอธิบายเพิ่มเติมสำหรับงานชิ้นนี้</div>
-                </div>
-
-                <!-- Downloadable Attachments -->
-                <div>
-                    <div class="detail-desc-title" style="display: flex; align-items: center; gap: 0.4rem;">
-                        <i data-lucide="paperclip" style="width: 16px; height: 16px; color: var(--accent-indigo);"></i>
-                        <span>ไฟล์แนบและเอกสารชิ้นงาน (<span id="detail-attachment-count-text">0</span>)</span>
-                    </div>
-                    <div class="attachments-list" id="detail-attachments-container">
-                        <!-- Loaded attachments with download links -->
-                    </div>
-                </div>
-            </div>
-            
-            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
-                <button class="icon-btn delete-btn" id="btn-detail-delete" title="ลบงานนี้ออกถาวร" style="width: 38px; height: 38px; background: rgba(239, 68, 68, 0.05);">
-                    <i data-lucide="trash-2" style="width: 20px; height: 20px;"></i>
-                </button>
-                <div style="display: flex; gap: 1rem;">
-                    <button class="btn-secondary" id="btn-detail-edit">
-                        <i data-lucide="edit-3"></i>
-                        <span>แก้ไขข้อมูล</span>
-                    </button>
-                    <button class="btn-primary" id="btn-close-detail-footer">
-                        <span>ปิดหน้าต่าง</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Floating Action Button for Mobile Viewports -->
-    <button class="mobile-fab" id="btn-create-task-fab" title="เพิ่มงานใหม่">
-        <i data-lucide="plus"></i>
-    </button>
-
-    <!-- ====================================================
-         DATABASE MODULE & APP SCRIPTS
-         ==================================================== -->
-    <!-- Firebase Compat SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
-
-    <script src="db.js"></script>
-    <script src="app.js"></script>
-    
-    <!-- Initialize Lucide Icons on launch -->
-    <script>
-        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
+
 </html>
