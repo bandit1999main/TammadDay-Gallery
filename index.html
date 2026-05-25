@@ -555,24 +555,34 @@
                 }
 
                 const unsubscribe = onAuthStateChanged(auth, async (usr) => {
-                    if (usr) {
-                        setUser(usr);
-                        
-                        const googleProfile = {
-                            name: usr.displayName || "User_" + usr.uid.substring(0, 5),
-                            bio: "แต่งแต้มภาพความทรงจำ 📸 (ดึงโปรไฟล์จาก Google)",
-                            avatarUrl: usr.photoURL || ""
-                        };
-                        
-                        // Automatically update Firestore profile to Google profile info
-                        const profileRef = doc(db, 'profiles', usr.uid);
-                        await setDoc(profileRef, googleProfile, { merge: true });
-                        setProfile(googleProfile);
-                    } else {
-                        setUser(null);
-                        setProfile({ name: "คุณ (โหมดออฟไลน์)", bio: "เข้าสู่คลาวด์เพื่อเซฟข้ามเครื่อง 📸", avatarUrl: "" });
+                    try {
+                        if (usr) {
+                            setUser(usr);
+                            
+                            const googleProfile = {
+                                name: usr.displayName || "User_" + usr.uid.substring(0, 5),
+                                bio: "แต่งแต้มภาพความทรงจำ 📸 (ดึงโปรไฟล์จาก Google)",
+                                avatarUrl: usr.photoURL || ""
+                            };
+                            
+                            try {
+                                // Automatically update Firestore profile to Google profile info
+                                const profileRef = doc(db, 'profiles', usr.uid);
+                                await setDoc(profileRef, googleProfile, { merge: true });
+                            } catch (fsErr) {
+                                console.warn("Firestore profile save blocked (Permission Denied). Saving locally.", fsErr);
+                                localStorage.setItem('ig_profile_local', JSON.stringify(googleProfile));
+                            }
+                            setProfile(googleProfile);
+                        } else {
+                            setUser(null);
+                            setProfile({ name: "คุณ (โหมดออฟไลน์)", bio: "เข้าสู่คลาวด์เพื่อเซฟข้ามเครื่อง 📸", avatarUrl: "" });
+                        }
+                    } catch (err) {
+                        console.error("Auth handler error:", err);
+                    } finally {
+                        setAuthLoading(false);
                     }
-                    setAuthLoading(false);
                 });
 
                 // Set up snapshot listener for Posts
